@@ -1,0 +1,29 @@
+cmake_minimum_required(VERSION 3.16)
+project(Low)
+
+set(CMAKE_CXX_STANDARD 17)
+
+file(GLOB_RECURSE LOW_SRC
+	"src/*.h",
+	"src/*.cpp"
+)
+
+add_library(Low STATIC ${LOW_SRC})
+
+add_subdirectory(vendor/glm)
+add_subdirectory(vendor/GLFW)
+find_package(Vulkan REQUIRED)
+
+target_include_directories(Low 
+	PUBLIC ${Vulkan_INCLUDE_DIRS}
+	PUBLIC vendor/glm/glm
+	PUBLIC vendor/GLFW/include
+)
+
+
+target_link_libraries(Low
+	PUBLIC Vulkan::Vulkan
+	PUBLIC glm
+	PUBLIC glfw
+)
+

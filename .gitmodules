@@ -1,0 +1,6 @@
+[submodule "Low/vendor/GLFW"]
+	path = Low/vendor/GLFW
+	url = https://github.com/glfw/glfw
+[submodule "Low/vendor/glm"]
+	path = Low/vendor/glm
+	url = https://github.com/g-truc/glm
