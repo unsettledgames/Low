@@ -32,3 +32,5 @@
 *.app
 
 Build
+Low/vendor
+Lower/vendor
