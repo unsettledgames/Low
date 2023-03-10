@@ -17,6 +17,7 @@ namespace Low
 
 		void Init();
 		void Run();
+		void Stop();
 
 		inline void PushLayer(Ref<Layer> layer) { m_Layers.push_back(layer); }
 

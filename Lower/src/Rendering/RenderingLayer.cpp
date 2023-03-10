@@ -12,6 +12,5 @@ namespace Low
 
 	void RenderingLayer::Update()
 	{
-		std::cout << "Rendering update" << std::endl;
 	}
 }

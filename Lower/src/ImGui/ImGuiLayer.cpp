@@ -14,6 +14,5 @@ namespace Low
 
 	void ImGuiLayer::Update()
 	{
-		std::cout << "ImGui update" << std::endl;
 	}
 }

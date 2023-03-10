@@ -23,6 +23,7 @@ target_link_libraries(Lower
 
 target_include_directories(Lower
 	PUBLIC src
+	PRIVATE ../Low/src
 	PUBLIC vendor/imguizmo
 	PUBLIC vendor/imgui
 )

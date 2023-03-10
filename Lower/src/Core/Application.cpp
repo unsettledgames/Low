@@ -1,8 +1,10 @@
 #include <Core/Application.h>
 #include <Core/Layer.h>
+#include <Renderer.h>
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+
 #include <iostream>
 
 namespace Low
@@ -12,6 +14,8 @@ namespace Low
 
 	void Application::Init()
 	{
+        std::vector<const char*> extensions;
+
         glfwInit();
 
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -20,9 +24,16 @@ namespace Low
         m_WindowHandler = glfwCreateWindow(m_Width, m_Height, m_Name.c_str(), nullptr, nullptr);
 
         uint32_t extensionCount = 0;
-        vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+        const char** glfwExtensions;
 
-        std::cout << extensionCount << " extensions supported\n";
+        glfwExtensions = glfwGetRequiredInstanceExtensions(&extensionCount);
+        for (uint32_t i = 0; i < extensionCount; i++)
+            extensions.push_back(glfwExtensions[i]);
+
+        extensions.push_back("VK_EXT_debug_utils");
+        extensionCount++;
+
+        Renderer::Init(extensions.data(), extensionCount);
 
         for (uint32_t i = 0; i < m_Layers.size(); i++)
             m_Layers[i]->Init();
@@ -38,7 +49,14 @@ namespace Low
             glfwPollEvents();
         }
 
+        Stop();
+	}
+
+    void Application::Stop()
+    {
         glfwDestroyWindow(m_WindowHandler);
         glfwTerminate();
-	}
+
+        Renderer::Destroy();
+    }
 }
