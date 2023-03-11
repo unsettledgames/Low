@@ -25,7 +25,7 @@ target_include_directories(Low
 
 
 target_link_libraries(Low
-	PUBLIC Vulkan::Vulkan
+	PUBLIC ${Vulkan_LIBRARIES}
 	PUBLIC glm
 	PUBLIC glfw
 	PUBLIC imgui

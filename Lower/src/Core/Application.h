@@ -26,7 +26,7 @@ namespace Low
 		uint32_t m_Width;
 		uint32_t m_Height;
 
-		GLFWwindow* m_WindowHandler;
+		GLFWwindow* m_WindowHandle;
 		std::vector<Ref<Layer>> m_Layers;
 	};
 }

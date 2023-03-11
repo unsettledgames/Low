@@ -21,7 +21,7 @@ namespace Low
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
-        m_WindowHandler = glfwCreateWindow(m_Width, m_Height, m_Name.c_str(), nullptr, nullptr);
+        m_WindowHandle = glfwCreateWindow(m_Width, m_Height, m_Name.c_str(), nullptr, nullptr);
 
         uint32_t extensionCount = 0;
         const char** glfwExtensions;
@@ -33,7 +33,7 @@ namespace Low
         extensions.push_back("VK_EXT_debug_utils");
         extensionCount++;
 
-        Renderer::Init(extensions.data(), extensionCount);
+        Renderer::Init(extensions.data(), extensionCount, m_WindowHandle);
 
         for (uint32_t i = 0; i < m_Layers.size(); i++)
             m_Layers[i]->Init();
@@ -41,7 +41,7 @@ namespace Low
 
 	void Application::Run()
 	{
-        while (!glfwWindowShouldClose(m_WindowHandler)) 
+        while (!glfwWindowShouldClose(m_WindowHandle)) 
         {
             for (uint32_t i = 0; i < m_Layers.size(); i++)
                 m_Layers[i]->Update();
@@ -54,7 +54,7 @@ namespace Low
 
     void Application::Stop()
     {
-        glfwDestroyWindow(m_WindowHandler);
+        glfwDestroyWindow(m_WindowHandle);
         glfwTerminate();
 
         Renderer::Destroy();
