@@ -4,8 +4,10 @@
 #include <set>
 #include <algorithm>
 
+#include <Core/Core.h>
 #include <Core/Debug.h>
 #include <Renderer.h>
+#include <Resources/Shader.h>
 
 #include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
@@ -23,10 +25,15 @@ namespace Low
 		VkPhysicalDevice PhysicalDevice = VK_NULL_HANDLE;
 		VkDevice LogicalDevice = VK_NULL_HANDLE;
 		VkSurfaceKHR WindowSurface = VK_NULL_HANDLE;
-		VkSwapchainKHR SwapChain = VK_NULL_HANDLE;
+		VkSwapchainKHR Swapchain = VK_NULL_HANDLE;
 
 		VkQueue GraphicsQueue = VK_NULL_HANDLE;
 		VkQueue PresentationQueue = VK_NULL_HANDLE;
+
+		std::vector<VkImage> SwapchainImages;
+		std::vector<VkImageView> SwapchainImageViews;
+		VkFormat SwapchainImageFormat;
+		VkExtent2D SwapchainExtent;
 
 		GLFWwindow* WindowHandle;
 		std::vector<const char*> RequiredExtesions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
@@ -259,7 +266,7 @@ namespace Low
 			throw std::runtime_error("failed to create window surface!");
 	}
 
-	static void CreateSwapChain()
+	static void CreateSwapchain()
 	{
 		// Swapchain properties
 		SwapchainSupportDetails swapchainProps = GetSwapchainSupportDetails(s_Data.PhysicalDevice);
@@ -349,9 +356,44 @@ namespace Low
 		createInfo.clipped = VK_TRUE;
 		createInfo.oldSwapchain = VK_NULL_HANDLE;
 
-		VkResult res = vkCreateSwapchainKHR(s_Data.LogicalDevice, &createInfo, nullptr, &s_Data.SwapChain);
+		VkResult res = vkCreateSwapchainKHR(s_Data.LogicalDevice, &createInfo, nullptr, &s_Data.Swapchain);
 		if (res != VK_SUCCESS)
 			std::cerr << "Couldn't create swapchain" << std::endl;
+
+		imageCount;
+		vkGetSwapchainImagesKHR(s_Data.LogicalDevice, s_Data.Swapchain, &imageCount, nullptr);
+		s_Data.SwapchainImages.resize(imageCount);
+		vkGetSwapchainImagesKHR(s_Data.LogicalDevice, s_Data.Swapchain, &imageCount, s_Data.SwapchainImages.data());
+
+		s_Data.SwapchainExtent = extent;
+		s_Data.SwapchainImageFormat = swapchainFormat.format;
+	}
+
+	void CreateImageViews()
+	{
+		s_Data.SwapchainImageViews.resize(s_Data.SwapchainImages.size());
+		for (uint32_t i = 0; i < s_Data.SwapchainImageViews.size(); i++)
+		{
+			VkImageViewCreateInfo createInfo = {};
+			createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+			createInfo.image = s_Data.SwapchainImages[i];
+			createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+			createInfo.format = s_Data.SwapchainImageFormat;
+
+			createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+			createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+			createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+			createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+
+			createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			createInfo.subresourceRange.baseMipLevel = 0;
+			createInfo.subresourceRange.levelCount = 1;
+			createInfo.subresourceRange.baseArrayLayer = 0;
+			createInfo.subresourceRange.layerCount = 1;
+
+			if (vkCreateImageView(s_Data.LogicalDevice, &createInfo, nullptr, &s_Data.SwapchainImageViews[i]) != VK_SUCCESS)
+				throw std::runtime_error("Couldn't create image view");
+		}
 	}
 
 	void Renderer::Init(const char** extensions, uint32_t nExtensions, GLFWwindow* handle)
@@ -367,17 +409,21 @@ namespace Low
 		PickPhysicalDevice();
 		CreateLogicalDevice();
 
-		CreateSwapChain();
+		CreateSwapchain();
+		CreateImageViews();
+
+		Ref<Shader> shader = CreateRef<Shader>("basic");
 	}
 
 	void Renderer::Destroy()
 	{
 		Debug::Shutdown();
 
-		vkDestroySwapchainKHR(s_Data.LogicalDevice, s_Data.SwapChain, nullptr);
+		for (auto& image : s_Data.SwapchainImageViews)
+			vkDestroyImageView(s_Data.LogicalDevice, image, nullptr);
+		vkDestroySwapchainKHR(s_Data.LogicalDevice, s_Data.Swapchain, nullptr);
 
 		vkDestroyDevice(s_Data.LogicalDevice, nullptr);
-
 		vkDestroySurfaceKHR(s_Data.Instance, s_Data.WindowSurface, nullptr);
 
 		vkDestroyInstance(s_Data.Instance, nullptr);

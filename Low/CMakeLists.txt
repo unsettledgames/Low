@@ -8,12 +8,11 @@ file(GLOB_RECURSE LOW_SRC
 	"src/*.cpp"
 )
 
+link_directories(${VULKAN_SDK_DIR}/Lib)
 add_library(Low STATIC ${LOW_SRC})
 
 add_subdirectory(vendor/glm)
 add_subdirectory(vendor/GLFW)
-
-find_package(Vulkan REQUIRED)
 
 target_include_directories(Low 
 	PUBLIC src
@@ -21,6 +20,7 @@ target_include_directories(Low
 	PUBLIC vendor/glm/glm
 	PUBLIC vendor/GLFW/include
 	PUBLIC vendor/imgui
+	PUBLIC ${VULKAN_SDK_DIR}/Include
 )
 
 
@@ -29,6 +29,8 @@ target_link_libraries(Low
 	PUBLIC glm
 	PUBLIC glfw
 	PUBLIC imgui
+	debug ${SHADERC_COMBINED_DEBUG}
+	optimized ${SHADERC_COMBINED}
 )
 
 # Keep the project structure
