@@ -1,3 +1,5 @@
+#include <Renderer.h>
+#include <GLFW/glfw3.h>
 #include <Rendering/RenderingLayer.h>
 #include <iostream>
 
@@ -12,5 +14,7 @@ namespace Low
 
 	void RenderingLayer::Update()
 	{
+		glfwPollEvents();
+		Renderer::DrawFrame();
 	}
 }

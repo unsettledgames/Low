@@ -18,6 +18,7 @@ namespace Low
 	{
 	public:
 		static void Init(const char** extensions, uint32_t nExtensions, GLFWwindow* windowHandle);
+		static void DrawFrame();
 		static void Destroy();
 	};
 }

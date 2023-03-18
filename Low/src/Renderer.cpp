@@ -18,7 +18,6 @@
 
 namespace Low
 {
-
 	struct RendererData
 	{
 		// Device
@@ -39,11 +38,25 @@ namespace Low
 
 		// Pipeline
 		VkPipelineLayout PipelineLayout;
+		VkRenderPass RenderPass;
+		VkPipeline GraphicsPipeline;
+		std::vector<VkFramebuffer> SwapchainFramebuffers;
+
+		// Commands
+		VkCommandPool CommandPool;
+		VkCommandBuffer CommandBuffer;
 
 		GLFWwindow* WindowHandle;
 		std::vector<const char*> RequiredExtesions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 
 	} s_Data;
+
+	struct Synch
+	{
+		VkSemaphore SemImageAvailable;
+		VkSemaphore SemRenderFinished;
+		VkFence FenInFlight;
+	} s_Synch;
 
 	struct QueueFamilyIndices
 	{
@@ -419,6 +432,30 @@ namespace Low
 
 		VkSubpassDescription subpass = {};
 		subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+		subpass.colorAttachmentCount = 1;
+		// The index is the index in the glsl shader layout!
+		subpass.pColorAttachments = &colorAttachmentRef;
+
+		VkRenderPassCreateInfo renderPassInfo = {};
+		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+		renderPassInfo.attachmentCount = 1;
+		renderPassInfo.pAttachments = &colorAttachment;
+		renderPassInfo.subpassCount = 1;
+		renderPassInfo.pSubpasses = &subpass;
+
+		VkSubpassDependency dep = {};
+		dep.srcSubpass = VK_SUBPASS_EXTERNAL;
+		dep.dstSubpass = 0;
+		dep.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+		dep.srcAccessMask = 0;
+		dep.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+		dep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+		renderPassInfo.dependencyCount = 1;
+		renderPassInfo.pDependencies = &dep;
+
+		if (vkCreateRenderPass(s_Data.LogicalDevice, &renderPassInfo, nullptr, &s_Data.RenderPass))
+			throw std::runtime_error("Failed to create render pass");
 	}
 
 	static void CreateGraphicsPipeline()
@@ -470,6 +507,7 @@ namespace Low
 		scissor.extent = s_Data.SwapchainExtent;
 
 		VkPipelineViewportStateCreateInfo viewportState = {};
+		viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
 		viewportState.pScissors = &scissor;
 		viewportState.pViewports = &viewport;
 		viewportState.scissorCount = 1;
@@ -529,6 +567,135 @@ namespace Low
 
 		if (vkCreatePipelineLayout(s_Data.LogicalDevice, &pipelineLayoutInfo, nullptr, &s_Data.PipelineLayout) != VK_SUCCESS)
 			throw std::runtime_error("failed to create pipeline layout!");
+
+		VkGraphicsPipelineCreateInfo pipelineCreateInfo = {};
+		pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+		pipelineCreateInfo.stageCount = 2;
+		pipelineCreateInfo.pStages = shaderStages;
+
+		pipelineCreateInfo.pVertexInputState = &vertexInputInfo;
+		pipelineCreateInfo.pInputAssemblyState = &inputAssembly;
+		pipelineCreateInfo.pViewportState = &viewportState;
+		pipelineCreateInfo.pRasterizationState = &rasterizer;
+		pipelineCreateInfo.pMultisampleState = &multisampling;
+		pipelineCreateInfo.pDepthStencilState = nullptr;
+		pipelineCreateInfo.pColorBlendState = &colorBlending;
+		pipelineCreateInfo.pDynamicState = &dynamicState;
+		pipelineCreateInfo.layout = s_Data.PipelineLayout;
+		pipelineCreateInfo.renderPass = s_Data.RenderPass;
+		pipelineCreateInfo.subpass = 0;
+		pipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
+		pipelineCreateInfo.basePipelineIndex = -1;
+
+		if (vkCreateGraphicsPipelines(s_Data.LogicalDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &s_Data.GraphicsPipeline) != VK_SUCCESS)
+			throw std::runtime_error("Couldn't create graphics pipeline");
+	}
+
+	static void CreateFramebuffer()
+	{
+		s_Data.SwapchainFramebuffers.resize(s_Data.SwapchainImageViews.size());
+		for (uint32_t i = 0; i < s_Data.SwapchainFramebuffers.size(); i++)
+		{
+			VkImageView attachments[] = { s_Data.SwapchainImageViews[i] };
+			VkFramebufferCreateInfo framebufferInfo{};
+			framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+			framebufferInfo.renderPass = s_Data.RenderPass;
+			framebufferInfo.attachmentCount = 1;
+			framebufferInfo.pAttachments = attachments;
+			framebufferInfo.width = s_Data.SwapchainExtent.width;
+			framebufferInfo.height = s_Data.SwapchainExtent.height;
+			framebufferInfo.layers = 1;
+
+			if (vkCreateFramebuffer(s_Data.LogicalDevice, &framebufferInfo, nullptr, &s_Data.SwapchainFramebuffers[i]) != VK_SUCCESS)
+				throw std::runtime_error("Couldn't create framebuffer");
+		}
+	}
+
+	static void CreateCommandPool()
+	{
+		auto queueIndices = GetQueueFamilyIndices(s_Data.PhysicalDevice);
+		VkCommandPoolCreateInfo commandPoolInfo = {};
+		commandPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+		commandPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+		commandPoolInfo.queueFamilyIndex = queueIndices.Graphics.value();
+
+		if (vkCreateCommandPool(s_Data.LogicalDevice, &commandPoolInfo, nullptr, &s_Data.CommandPool) != VK_SUCCESS)
+			throw std::runtime_error("Couldn't create command pool");
+	}
+
+	static void CreateCommandBuffer()
+	{
+		VkCommandBufferAllocateInfo allocInfo{};
+		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		allocInfo.commandPool = s_Data.CommandPool;
+		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		allocInfo.commandBufferCount = 1;
+
+		if (vkAllocateCommandBuffers(s_Data.LogicalDevice, &allocInfo, &s_Data.CommandBuffer) != VK_SUCCESS) {
+			throw std::runtime_error("Couldn't allocate command buffers");
+		}
+	}
+
+	static void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+	{
+		VkCommandBufferBeginInfo beginInfo{};
+		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		beginInfo.flags = 0; // Optional
+		beginInfo.pInheritanceInfo = nullptr; // Optional
+
+		if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
+			throw std::runtime_error("failed to begin recording command buffer!");
+		}
+
+		VkRenderPassBeginInfo renderPassInfo{};
+		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		renderPassInfo.renderPass = s_Data.RenderPass;
+		renderPassInfo.framebuffer = s_Data.SwapchainFramebuffers[imageIndex];
+		renderPassInfo.renderArea.offset = { 0,0 };
+		renderPassInfo.renderArea.extent = s_Data.SwapchainExtent;
+
+		VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
+		renderPassInfo.clearValueCount = 1;
+		renderPassInfo.pClearValues = &clearColor;
+
+		vkCmdBeginRenderPass(s_Data.CommandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+		{
+			VkViewport viewport = {};
+			VkRect2D scissors = {};
+
+			viewport.x = 0.0f;
+			viewport.y = 0.0f;
+			viewport.width = s_Data.SwapchainExtent.width;
+			viewport.height = s_Data.SwapchainExtent.height;
+			viewport.minDepth = 0.0f;
+			viewport.maxDepth = 1.0f;
+
+			vkCmdBindPipeline(s_Data.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, s_Data.GraphicsPipeline);
+
+			vkCmdSetViewport(s_Data.CommandBuffer, 0, 1, &viewport);
+			vkCmdSetScissor(s_Data.CommandBuffer, 0, 1, &scissors);
+
+			vkCmdDraw(s_Data.CommandBuffer, 3, 1, 0, 0);
+		}
+		vkCmdEndRenderPass(s_Data.CommandBuffer);
+
+		if (vkEndCommandBuffer(s_Data.CommandBuffer) != VK_SUCCESS)
+			throw std::runtime_error("Error ending the command buffer");
+	}
+
+	static void CreateSynchronizationObjects()
+	{
+		VkSemaphoreCreateInfo semInfo = {};
+		VkFenceCreateInfo fenInfo = {};
+
+		semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+		fenInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+		fenInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+		if (vkCreateSemaphore(s_Data.LogicalDevice, &semInfo, nullptr, &s_Synch.SemImageAvailable) != VK_SUCCESS ||
+			vkCreateSemaphore(s_Data.LogicalDevice, &semInfo, nullptr, &s_Synch.SemRenderFinished) != VK_SUCCESS ||
+			vkCreateFence(s_Data.LogicalDevice, &fenInfo, nullptr, &s_Synch.FenInFlight) != VK_SUCCESS)
+			throw std::runtime_error("Couldn't create synchronization structures");
 	}
 
 	void Renderer::Init(const char** extensions, uint32_t nExtensions, GLFWwindow* handle)
@@ -549,6 +716,54 @@ namespace Low
 
 		CreateRenderPass();
 		CreateGraphicsPipeline();
+		CreateFramebuffer();
+
+		CreateCommandPool();
+		CreateCommandBuffer();
+
+		CreateSynchronizationObjects();
+	}
+
+	void Renderer::DrawFrame()
+	{
+		VkSubmitInfo submitInfo = {};
+		VkPresentInfoKHR presentInfo = {};
+		VkSemaphore waitSemaphores[] = { s_Synch.SemImageAvailable };
+		VkSemaphore signalSemaphores[] = { s_Synch.SemRenderFinished };
+		VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+		
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submitInfo.pWaitSemaphores = waitSemaphores;
+		submitInfo.pWaitDstStageMask = waitStages;
+		submitInfo.commandBufferCount = 1;
+		submitInfo.pCommandBuffers = &s_Data.CommandBuffer;
+		submitInfo.signalSemaphoreCount = 1;
+		submitInfo.pSignalSemaphores = signalSemaphores;
+
+		uint32_t imageIdx;
+
+		vkWaitForFences(s_Data.LogicalDevice, 1, &s_Synch.FenInFlight, VK_TRUE, UINT64_MAX);
+		vkResetFences(s_Data.LogicalDevice, 1, &s_Synch.FenInFlight);
+
+		vkAcquireNextImageKHR(s_Data.LogicalDevice, s_Data.Swapchain, UINT64_MAX, s_Synch.SemImageAvailable, VK_NULL_HANDLE, &imageIdx);
+
+		vkResetCommandBuffer(s_Data.CommandBuffer, 0);
+		RecordCommandBuffer(s_Data.CommandBuffer, imageIdx);
+
+		if (vkQueueSubmit(s_Data.GraphicsQueue, 1, &submitInfo, s_Synch.FenInFlight) != VK_SUCCESS)
+			throw std::runtime_error("Couldn't submit queue for rendering");
+
+		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+		presentInfo.waitSemaphoreCount = 1;
+		presentInfo.pWaitSemaphores = signalSemaphores;
+
+		VkSwapchainKHR swapChains = { s_Data.Swapchain };
+		presentInfo.swapchainCount = 1;
+		presentInfo.pSwapchains = &swapChains;
+		presentInfo.pImageIndices = &imageIdx;
+		presentInfo.pResults = nullptr;
+
+		vkQueuePresentKHR(s_Data.PresentationQueue, &presentInfo);
 	}
 
 	void Renderer::Destroy()
@@ -557,12 +772,23 @@ namespace Low
 
 		for (auto& image : s_Data.SwapchainImageViews)
 			vkDestroyImageView(s_Data.LogicalDevice, image, nullptr);
+		for (auto& buf : s_Data.SwapchainFramebuffers)
+			vkDestroyFramebuffer(s_Data.LogicalDevice, buf, nullptr);
+
 		vkDestroySwapchainKHR(s_Data.LogicalDevice, s_Data.Swapchain, nullptr);
 		vkDestroyPipelineLayout(s_Data.LogicalDevice, s_Data.PipelineLayout, nullptr);
+		vkDestroyPipeline(s_Data.LogicalDevice, s_Data.GraphicsPipeline, nullptr);
+		vkDestroyRenderPass(s_Data.LogicalDevice, s_Data.RenderPass, nullptr);
+
+		vkDestroyCommandPool(s_Data.LogicalDevice, s_Data.CommandPool, nullptr);
+
+		vkDestroySemaphore(s_Data.LogicalDevice, s_Synch.SemImageAvailable, nullptr);
+		vkDestroySemaphore(s_Data.LogicalDevice, s_Synch.SemRenderFinished, nullptr);
+		vkDestroyFence(s_Data.LogicalDevice, s_Synch.FenInFlight, nullptr);
 
 		vkDestroyDevice(s_Data.LogicalDevice, nullptr);
-		vkDestroySurfaceKHR(s_Data.Instance, s_Data.WindowSurface, nullptr);
 
+		vkDestroySurfaceKHR(s_Data.Instance, s_Data.WindowSurface, nullptr);
 		vkDestroyInstance(s_Data.Instance, nullptr);
 
 	}
