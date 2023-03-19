@@ -670,6 +670,10 @@ namespace Low
 			viewport.minDepth = 0.0f;
 			viewport.maxDepth = 1.0f;
 
+			scissors.extent = s_Data.SwapchainExtent;
+			scissors.offset.x = 0.0f;
+			scissors.offset.y = 0.0f;
+
 			vkCmdBindPipeline(s_Data.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, s_Data.GraphicsPipeline);
 
 			vkCmdSetViewport(s_Data.CommandBuffer, 0, 1, &viewport);
@@ -703,7 +707,6 @@ namespace Low
 		s_Data.WindowHandle = handle;
 
 		Debug::InitValidationLayers();
-
 		CreateVkInstance(extensions, nExtensions);
 		Debug::InitMessengers(s_Data.Instance);
 
@@ -726,20 +729,7 @@ namespace Low
 
 	void Renderer::DrawFrame()
 	{
-		VkSubmitInfo submitInfo = {};
-		VkPresentInfoKHR presentInfo = {};
-		VkSemaphore waitSemaphores[] = { s_Synch.SemImageAvailable };
-		VkSemaphore signalSemaphores[] = { s_Synch.SemRenderFinished };
 		VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-		
-		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		submitInfo.pWaitSemaphores = waitSemaphores;
-		submitInfo.pWaitDstStageMask = waitStages;
-		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &s_Data.CommandBuffer;
-		submitInfo.signalSemaphoreCount = 1;
-		submitInfo.pSignalSemaphores = signalSemaphores;
-
 		uint32_t imageIdx;
 
 		vkWaitForFences(s_Data.LogicalDevice, 1, &s_Synch.FenInFlight, VK_TRUE, UINT64_MAX);
@@ -750,13 +740,24 @@ namespace Low
 		vkResetCommandBuffer(s_Data.CommandBuffer, 0);
 		RecordCommandBuffer(s_Data.CommandBuffer, imageIdx);
 
+		VkSubmitInfo submitInfo = {};
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submitInfo.waitSemaphoreCount = 1;
+		submitInfo.pWaitSemaphores = &s_Synch.SemImageAvailable;
+		submitInfo.pWaitDstStageMask = waitStages;
+		submitInfo.commandBufferCount = 1;
+		submitInfo.pCommandBuffers = &s_Data.CommandBuffer;
+		submitInfo.signalSemaphoreCount = 1;
+		submitInfo.pSignalSemaphores = &s_Synch.SemRenderFinished;
+
 		if (vkQueueSubmit(s_Data.GraphicsQueue, 1, &submitInfo, s_Synch.FenInFlight) != VK_SUCCESS)
 			throw std::runtime_error("Couldn't submit queue for rendering");
 
+		VkPresentInfoKHR presentInfo = {};
 		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 		presentInfo.waitSemaphoreCount = 1;
-		presentInfo.pWaitSemaphores = signalSemaphores;
-
+		presentInfo.pWaitSemaphores = &s_Synch.SemRenderFinished;
+		 
 		VkSwapchainKHR swapChains = { s_Data.Swapchain };
 		presentInfo.swapchainCount = 1;
 		presentInfo.pSwapchains = &swapChains;
