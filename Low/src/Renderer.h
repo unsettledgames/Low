@@ -14,10 +14,18 @@ struct GLFWwindow;
 
 namespace Low
 {
+	struct RendererConfig
+	{
+		const char** Extensions;
+		uint32_t ExtensionCount;
+
+		uint32_t MaxFramesInFlight;
+	};
+
 	class Renderer
 	{
 	public:
-		static void Init(const char** extensions, uint32_t nExtensions, GLFWwindow* windowHandle);
+		static void Init(RendererConfig config, GLFWwindow* windowHandle);
 		static void DrawFrame();
 		static void Destroy();
 	};

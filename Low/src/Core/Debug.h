@@ -38,7 +38,7 @@ namespace Low
 			void* pUserData)
 		{
 
-			std::cerr << "Validation layer: " << pCallbackData->pMessage << std::endl << std::endl;
+			std::cerr << pCallbackData->pMessage << std::endl << std::endl;
 			return VK_FALSE;
 		}
 

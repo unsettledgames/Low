@@ -18,6 +18,8 @@
 
 namespace Low
 {
+	static  RendererConfig s_Config;
+
 	struct RendererData
 	{
 		// Device
@@ -44,19 +46,27 @@ namespace Low
 
 		// Commands
 		VkCommandPool CommandPool;
-		VkCommandBuffer CommandBuffer;
+		std::vector<VkCommandBuffer> CommandBuffers;
 
 		GLFWwindow* WindowHandle;
 		std::vector<const char*> RequiredExtesions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 
 	} s_Data;
 
+	struct RendererState
+	{
+		uint32_t CurrentFrame = 0;
+		bool FramebufferResized = false;
+	} s_State;
+
 	struct Synch
 	{
 		VkSemaphore SemImageAvailable;
 		VkSemaphore SemRenderFinished;
 		VkFence FenInFlight;
-	} s_Synch;
+	};
+
+	std::vector<Synch> s_Synch;
 
 	struct QueueFamilyIndices
 	{
@@ -623,15 +633,17 @@ namespace Low
 			throw std::runtime_error("Couldn't create command pool");
 	}
 
-	static void CreateCommandBuffer()
+	static void CreateCommandBuffers()
 	{
 		VkCommandBufferAllocateInfo allocInfo{};
+		s_Data.CommandBuffers.resize(s_Config.MaxFramesInFlight);
+		
 		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 		allocInfo.commandPool = s_Data.CommandPool;
 		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		allocInfo.commandBufferCount = 1;
+		allocInfo.commandBufferCount = s_Data.CommandBuffers.size();
 
-		if (vkAllocateCommandBuffers(s_Data.LogicalDevice, &allocInfo, &s_Data.CommandBuffer) != VK_SUCCESS) {
+		if (vkAllocateCommandBuffers(s_Data.LogicalDevice, &allocInfo, s_Data.CommandBuffers.data()) != VK_SUCCESS) {
 			throw std::runtime_error("Couldn't allocate command buffers");
 		}
 	}
@@ -658,7 +670,7 @@ namespace Low
 		renderPassInfo.clearValueCount = 1;
 		renderPassInfo.pClearValues = &clearColor;
 
-		vkCmdBeginRenderPass(s_Data.CommandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+		vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 		{
 			VkViewport viewport = {};
 			VkRect2D scissors = {};
@@ -674,40 +686,82 @@ namespace Low
 			scissors.offset.x = 0.0f;
 			scissors.offset.y = 0.0f;
 
-			vkCmdBindPipeline(s_Data.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, s_Data.GraphicsPipeline);
+			vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, s_Data.GraphicsPipeline);
 
-			vkCmdSetViewport(s_Data.CommandBuffer, 0, 1, &viewport);
-			vkCmdSetScissor(s_Data.CommandBuffer, 0, 1, &scissors);
+			vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+			vkCmdSetScissor(commandBuffer, 0, 1, &scissors);
 
-			vkCmdDraw(s_Data.CommandBuffer, 3, 1, 0, 0);
+			vkCmdDraw(commandBuffer, 3, 1, 0, 0);
 		}
-		vkCmdEndRenderPass(s_Data.CommandBuffer);
+		vkCmdEndRenderPass(commandBuffer);
 
-		if (vkEndCommandBuffer(s_Data.CommandBuffer) != VK_SUCCESS)
+		if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS)
 			throw std::runtime_error("Error ending the command buffer");
 	}
 
 	static void CreateSynchronizationObjects()
 	{
-		VkSemaphoreCreateInfo semInfo = {};
-		VkFenceCreateInfo fenInfo = {};
+		s_Synch.resize(s_Config.MaxFramesInFlight);
 
-		semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-		fenInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-		fenInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+		for (uint32_t i = 0; i < s_Synch.size(); i++)
+		{
+			VkSemaphoreCreateInfo semInfo = {};
+			VkFenceCreateInfo fenInfo = {};
 
-		if (vkCreateSemaphore(s_Data.LogicalDevice, &semInfo, nullptr, &s_Synch.SemImageAvailable) != VK_SUCCESS ||
-			vkCreateSemaphore(s_Data.LogicalDevice, &semInfo, nullptr, &s_Synch.SemRenderFinished) != VK_SUCCESS ||
-			vkCreateFence(s_Data.LogicalDevice, &fenInfo, nullptr, &s_Synch.FenInFlight) != VK_SUCCESS)
-			throw std::runtime_error("Couldn't create synchronization structures");
+			semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+			fenInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+			fenInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+			if (vkCreateSemaphore(s_Data.LogicalDevice, &semInfo, nullptr, &s_Synch[i].SemImageAvailable) != VK_SUCCESS ||
+				vkCreateSemaphore(s_Data.LogicalDevice, &semInfo, nullptr, &s_Synch[i].SemRenderFinished) != VK_SUCCESS ||
+				vkCreateFence(s_Data.LogicalDevice, &fenInfo, nullptr, &s_Synch[i].FenInFlight) != VK_SUCCESS)
+				throw std::runtime_error("Couldn't create synchronization structures");
+		}
 	}
 
-	void Renderer::Init(const char** extensions, uint32_t nExtensions, GLFWwindow* handle)
+	static void CleanupSwapchain()
 	{
-		s_Data.WindowHandle = handle;
+		for (auto& image : s_Data.SwapchainImageViews)
+			vkDestroyImageView(s_Data.LogicalDevice, image, nullptr);
+		for (auto& buf : s_Data.SwapchainFramebuffers)
+			vkDestroyFramebuffer(s_Data.LogicalDevice, buf, nullptr);
+		vkDestroySwapchainKHR(s_Data.LogicalDevice, s_Data.Swapchain, nullptr);
+	}
+
+	static void RecreateSwapchain()
+	{
+		int width = 0, height = 0;
+		glfwGetFramebufferSize(s_Data.WindowHandle, &width, &height);
+		while (width == 0 || height == 0) 
+		{
+			glfwGetFramebufferSize(s_Data.WindowHandle, &width, &height);
+			glfwWaitEvents();
+		}
+
+		vkDeviceWaitIdle(s_Data.LogicalDevice);
+
+		CleanupSwapchain();
+
+		CreateSwapchain();
+		CreateImageViews();
+		CreateFramebuffer();
+	}
+
+	static void OnFramebufferResize(GLFWwindow* window, int width, int height)
+	{
+		s_State.FramebufferResized = true;
+		std::cout << "Resized!" << std::endl;
+	}
+
+	void Renderer::Init(RendererConfig config, GLFWwindow* windowHandle)
+	{
+		s_Config = config;
+
+		s_Data.WindowHandle = windowHandle;
+		glfwSetFramebufferSizeCallback(s_Data.WindowHandle, OnFramebufferResize);
 
 		Debug::InitValidationLayers();
-		CreateVkInstance(extensions, nExtensions);
+		CreateVkInstance(config.Extensions, config.ExtensionCount);
 		Debug::InitMessengers(s_Data.Instance);
 
 		CreateWindowSurface();
@@ -722,7 +776,7 @@ namespace Low
 		CreateFramebuffer();
 
 		CreateCommandPool();
-		CreateCommandBuffer();
+		CreateCommandBuffers();
 
 		CreateSynchronizationObjects();
 	}
@@ -732,61 +786,75 @@ namespace Low
 		VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 		uint32_t imageIdx;
 
-		vkWaitForFences(s_Data.LogicalDevice, 1, &s_Synch.FenInFlight, VK_TRUE, UINT64_MAX);
-		vkResetFences(s_Data.LogicalDevice, 1, &s_Synch.FenInFlight);
+		vkWaitForFences(s_Data.LogicalDevice, 1, &s_Synch[s_State.CurrentFrame].FenInFlight, VK_TRUE, UINT64_MAX);
 
-		vkAcquireNextImageKHR(s_Data.LogicalDevice, s_Data.Swapchain, UINT64_MAX, s_Synch.SemImageAvailable, VK_NULL_HANDLE, &imageIdx);
+		VkResult res = vkAcquireNextImageKHR(s_Data.LogicalDevice, s_Data.Swapchain, UINT64_MAX, 
+			s_Synch[s_State.CurrentFrame].SemImageAvailable, VK_NULL_HANDLE, &imageIdx);
+		if (res == VK_ERROR_OUT_OF_DATE_KHR)
+		{
+			RecreateSwapchain();
+			return;
+		}
 
-		vkResetCommandBuffer(s_Data.CommandBuffer, 0);
-		RecordCommandBuffer(s_Data.CommandBuffer, imageIdx);
+		vkResetFences(s_Data.LogicalDevice, 1, &s_Synch[s_State.CurrentFrame].FenInFlight);
+		vkResetCommandBuffer(s_Data.CommandBuffers[s_State.CurrentFrame], 0);
+		
+		RecordCommandBuffer(s_Data.CommandBuffers[s_State.CurrentFrame], imageIdx);
 
 		VkSubmitInfo submitInfo = {};
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 		submitInfo.waitSemaphoreCount = 1;
-		submitInfo.pWaitSemaphores = &s_Synch.SemImageAvailable;
+		submitInfo.pWaitSemaphores = &s_Synch[s_State.CurrentFrame].SemImageAvailable;
 		submitInfo.pWaitDstStageMask = waitStages;
 		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &s_Data.CommandBuffer;
+		submitInfo.pCommandBuffers = &s_Data.CommandBuffers[s_State.CurrentFrame];
 		submitInfo.signalSemaphoreCount = 1;
-		submitInfo.pSignalSemaphores = &s_Synch.SemRenderFinished;
+		submitInfo.pSignalSemaphores = &s_Synch[s_State.CurrentFrame].SemRenderFinished;
 
-		if (vkQueueSubmit(s_Data.GraphicsQueue, 1, &submitInfo, s_Synch.FenInFlight) != VK_SUCCESS)
+		if (vkQueueSubmit(s_Data.GraphicsQueue, 1, &submitInfo, s_Synch[s_State.CurrentFrame].FenInFlight) != VK_SUCCESS)
 			throw std::runtime_error("Couldn't submit queue for rendering");
 
 		VkPresentInfoKHR presentInfo = {};
 		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 		presentInfo.waitSemaphoreCount = 1;
-		presentInfo.pWaitSemaphores = &s_Synch.SemRenderFinished;
-		 
+		presentInfo.pWaitSemaphores = &s_Synch[s_State.CurrentFrame].SemRenderFinished;
+		
 		VkSwapchainKHR swapChains = { s_Data.Swapchain };
 		presentInfo.swapchainCount = 1;
 		presentInfo.pSwapchains = &swapChains;
 		presentInfo.pImageIndices = &imageIdx;
 		presentInfo.pResults = nullptr;
 
-		vkQueuePresentKHR(s_Data.PresentationQueue, &presentInfo);
+		res = vkQueuePresentKHR(s_Data.PresentationQueue, &presentInfo);
+		if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR || s_State.FramebufferResized)
+		{
+			RecreateSwapchain();
+			return;
+		}
+		s_State.CurrentFrame = (s_State.CurrentFrame + 1) % s_Config.MaxFramesInFlight;
 	}
 
 	void Renderer::Destroy()
 	{
 		Debug::Shutdown();
 
-		for (auto& image : s_Data.SwapchainImageViews)
-			vkDestroyImageView(s_Data.LogicalDevice, image, nullptr);
-		for (auto& buf : s_Data.SwapchainFramebuffers)
-			vkDestroyFramebuffer(s_Data.LogicalDevice, buf, nullptr);
+		vkDeviceWaitIdle(s_Data.LogicalDevice);
 
-		vkDestroySwapchainKHR(s_Data.LogicalDevice, s_Data.Swapchain, nullptr);
+		CleanupSwapchain();
+
 		vkDestroyPipelineLayout(s_Data.LogicalDevice, s_Data.PipelineLayout, nullptr);
 		vkDestroyPipeline(s_Data.LogicalDevice, s_Data.GraphicsPipeline, nullptr);
 		vkDestroyRenderPass(s_Data.LogicalDevice, s_Data.RenderPass, nullptr);
 
 		vkDestroyCommandPool(s_Data.LogicalDevice, s_Data.CommandPool, nullptr);
 
-		vkDestroySemaphore(s_Data.LogicalDevice, s_Synch.SemImageAvailable, nullptr);
-		vkDestroySemaphore(s_Data.LogicalDevice, s_Synch.SemRenderFinished, nullptr);
-		vkDestroyFence(s_Data.LogicalDevice, s_Synch.FenInFlight, nullptr);
-
+		for (uint32_t i = 0; i < s_Synch.size(); i++)
+		{
+			vkDestroySemaphore(s_Data.LogicalDevice, s_Synch[i].SemImageAvailable, nullptr);
+			vkDestroySemaphore(s_Data.LogicalDevice, s_Synch[i].SemRenderFinished, nullptr);
+			vkDestroyFence(s_Data.LogicalDevice, s_Synch[i].FenInFlight, nullptr);
+		}
+		
 		vkDestroyDevice(s_Data.LogicalDevice, nullptr);
 
 		vkDestroySurfaceKHR(s_Data.Instance, s_Data.WindowSurface, nullptr);

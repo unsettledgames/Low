@@ -19,7 +19,7 @@ namespace Low
         glfwInit();
 
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
         m_WindowHandle = glfwCreateWindow(m_Width, m_Height, m_Name.c_str(), nullptr, nullptr);
 
@@ -33,7 +33,12 @@ namespace Low
         extensions.push_back("VK_EXT_debug_utils");
         extensionCount++;
 
-        Renderer::Init(extensions.data(), extensionCount, m_WindowHandle);
+        RendererConfig config;
+        config.ExtensionCount = extensionCount;
+        config.Extensions = extensions.data();
+        config.MaxFramesInFlight = 2;
+
+        Renderer::Init(config, m_WindowHandle);
 
         for (uint32_t i = 0; i < m_Layers.size(); i++)
             m_Layers[i]->Init();
