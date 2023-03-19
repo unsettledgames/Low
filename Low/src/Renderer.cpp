@@ -7,6 +7,8 @@
 #include <Core/Core.h>
 #include <Core/Debug.h>
 #include <Renderer.h>
+
+#include <Structures/VertexBuffer.h>
 #include <Resources/Shader.h>
 
 #include <vulkan/vulkan.h>
@@ -47,6 +49,10 @@ namespace Low
 		// Commands
 		VkCommandPool CommandPool;
 		std::vector<VkCommandBuffer> CommandBuffers;
+
+		// Buffers
+		VkBuffer VertexBuffer;
+		VkDeviceMemory VertexBufferMemory;
 
 		GLFWwindow* WindowHandle;
 		std::vector<const char*> RequiredExtesions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
@@ -493,11 +499,14 @@ namespace Low
 		dynamicState.pDynamicStates = dynamicStates.data();
 
 		VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
+		auto bindingDesc = Vertex::GetVertexBindingDescription();
+		auto attributeDesc = Vertex::GetVertexAttributeDescriptions();
+
 		vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-		vertexInputInfo.vertexBindingDescriptionCount = 0;
-		vertexInputInfo.pVertexBindingDescriptions = nullptr;
-		vertexInputInfo.vertexAttributeDescriptionCount = 0;
-		vertexInputInfo.pVertexAttributeDescriptions = nullptr;
+		vertexInputInfo.vertexBindingDescriptionCount =	1;
+		vertexInputInfo.pVertexBindingDescriptions = &bindingDesc;
+		vertexInputInfo.vertexAttributeDescriptionCount = attributeDesc.size();
+		vertexInputInfo.pVertexAttributeDescriptions = attributeDesc.data();
 
 		VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
 		inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -686,11 +695,15 @@ namespace Low
 			scissors.offset.x = 0.0f;
 			scissors.offset.y = 0.0f;
 
+			VkBuffer buffers[] = { s_Data.VertexBuffer };
+			VkDeviceSize offsets[] = { 0 };
+
 			vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, s_Data.GraphicsPipeline);
 
 			vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 			vkCmdSetScissor(commandBuffer, 0, 1, &scissors);
 
+			vkCmdBindVertexBuffers(commandBuffer, 0, 1, buffers, offsets);
 			vkCmdDraw(commandBuffer, 3, 1, 0, 0);
 		}
 		vkCmdEndRenderPass(commandBuffer);
@@ -753,6 +766,56 @@ namespace Low
 		std::cout << "Resized!" << std::endl;
 	}
 
+	static uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags props)
+	{
+		VkPhysicalDeviceMemoryProperties memProperties;
+		vkGetPhysicalDeviceMemoryProperties(s_Data.PhysicalDevice, &memProperties);
+
+		for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
+		{
+			if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & props) == props)
+				return i;
+		}
+
+		throw std::runtime_error("Couldn't find suitable memory type");
+	}
+
+	static void CreateVertexBuffer()
+	{
+		const std::vector<Vertex> vertices = {
+			{{0.0f, -0.5f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+			{{0.5f, 0.5f, 0.0f}, {0.0f, 1.0f, 0.0f, 1.0f}},
+			{{-0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}}
+		};
+		VkBufferCreateInfo bufferInfo = {};
+		bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		bufferInfo.size = sizeof(Vertex) * 3;
+		bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+		bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+		if (vkCreateBuffer(s_Data.LogicalDevice, &bufferInfo, nullptr, &s_Data.VertexBuffer) != VK_SUCCESS)
+			throw std::runtime_error("Couldn't create vertex buffer");
+
+		VkMemoryRequirements memRequirements = {};
+		vkGetBufferMemoryRequirements(s_Data.LogicalDevice, s_Data.VertexBuffer, &memRequirements);
+		
+		VkMemoryAllocateInfo allocateInfo = {};
+		allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+		allocateInfo.allocationSize = memRequirements.size;
+		allocateInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+		if (vkAllocateMemory(s_Data.LogicalDevice, &allocateInfo, nullptr, &s_Data.VertexBufferMemory) != VK_SUCCESS)
+			throw std::runtime_error("Couldn't allocate memory for the vertex buffer");
+		vkBindBufferMemory(s_Data.LogicalDevice, s_Data.VertexBuffer, s_Data.VertexBufferMemory, 0);
+
+		void* data;
+		vkMapMemory(s_Data.LogicalDevice, s_Data.VertexBufferMemory, 0, bufferInfo.size, 0, &data);
+		memcpy(data, vertices.data(), (size_t)bufferInfo.size);
+		vkUnmapMemory(s_Data.LogicalDevice, s_Data.VertexBufferMemory);
+
+	}
+
 	void Renderer::Init(RendererConfig config, GLFWwindow* windowHandle)
 	{
 		s_Config = config;
@@ -777,6 +840,7 @@ namespace Low
 
 		CreateCommandPool();
 		CreateCommandBuffers();
+		CreateVertexBuffer();
 
 		CreateSynchronizationObjects();
 	}
@@ -854,6 +918,9 @@ namespace Low
 			vkDestroySemaphore(s_Data.LogicalDevice, s_Synch[i].SemRenderFinished, nullptr);
 			vkDestroyFence(s_Data.LogicalDevice, s_Synch[i].FenInFlight, nullptr);
 		}
+
+		vkDestroyBuffer(s_Data.LogicalDevice, s_Data.VertexBuffer, nullptr);
+		vkFreeMemory(s_Data.LogicalDevice, s_Data.VertexBufferMemory, nullptr);
 		
 		vkDestroyDevice(s_Data.LogicalDevice, nullptr);
 
