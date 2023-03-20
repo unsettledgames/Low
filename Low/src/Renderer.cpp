@@ -53,6 +53,8 @@ namespace Low
 		// Buffers
 		VkBuffer VertexBuffer;
 		VkDeviceMemory VertexBufferMemory;
+		VkBuffer IndexBuffer;
+		VkDeviceMemory IndexBufferMemory;
 
 		GLFWwindow* WindowHandle;
 		std::vector<const char*> RequiredExtesions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
@@ -704,7 +706,8 @@ namespace Low
 			vkCmdSetScissor(commandBuffer, 0, 1, &scissors);
 
 			vkCmdBindVertexBuffers(commandBuffer, 0, 1, buffers, offsets);
-			vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+			vkCmdBindIndexBuffer(commandBuffer, s_Data.IndexBuffer, 0, VK_INDEX_TYPE_UINT16);
+			vkCmdDrawIndexed(commandBuffer, 6, 1, 0, 0, 0);
 		}
 		vkCmdEndRenderPass(commandBuffer);
 
@@ -846,10 +849,12 @@ namespace Low
 	static void CreateVertexBuffer()
 	{
 		const std::vector<Vertex> vertices = {
-			{{0.0f, -0.5f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
-			{{0.5f, 0.5f, 0.0f}, {0.0f, 1.0f, 0.0f, 1.0f}},
-			{{-0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}}
+			{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},
+			{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f, 1.0f}},
+			{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}},
+			{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}}
 		};
+
 		VkDeviceSize size = sizeof(Vertex) * vertices.size();
 
 		VkBuffer stagingBuffer;
@@ -871,6 +876,29 @@ namespace Low
 		vkFreeMemory(s_Data.LogicalDevice, stagingMemory, nullptr);
 	}
 
+	static void CreateIndexBuffer()
+	{
+		const std::vector<uint16_t> indices = { 0, 1, 2, 2, 3, 0 };
+		VkDeviceSize size = sizeof(uint16_t) * indices.size();
+
+		VkBuffer stagingBuffer;
+		VkDeviceMemory stagingMemory;
+
+		CreateBuffer(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			s_Data.IndexBuffer, s_Data.IndexBufferMemory);
+		CreateBuffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			stagingBuffer, stagingMemory);
+
+		void* data;
+		vkMapMemory(s_Data.LogicalDevice, stagingMemory, 0, size, 0, &data);
+		memcpy(data, indices.data(), (size_t)size);
+		vkUnmapMemory(s_Data.LogicalDevice, stagingMemory);
+
+		CopyBuffer(s_Data.IndexBuffer, stagingBuffer, size);
+
+		vkDestroyBuffer(s_Data.LogicalDevice, stagingBuffer, nullptr);
+		vkFreeMemory(s_Data.LogicalDevice, stagingMemory, nullptr);
+	}
 	
 
 	void Renderer::Init(RendererConfig config, GLFWwindow* windowHandle)
@@ -897,7 +925,9 @@ namespace Low
 
 		CreateCommandPool();
 		CreateCommandBuffers();
+		
 		CreateVertexBuffer();
+		CreateIndexBuffer();
 
 		CreateSynchronizationObjects();
 	}
@@ -976,9 +1006,12 @@ namespace Low
 			vkDestroyFence(s_Data.LogicalDevice, s_Synch[i].FenInFlight, nullptr);
 		}
 
+		// Delete buffers
 		vkDestroyBuffer(s_Data.LogicalDevice, s_Data.VertexBuffer, nullptr);
 		vkFreeMemory(s_Data.LogicalDevice, s_Data.VertexBufferMemory, nullptr);
-		
+		vkDestroyBuffer(s_Data.LogicalDevice, s_Data.IndexBuffer, nullptr);
+		vkFreeMemory(s_Data.LogicalDevice, s_Data.IndexBufferMemory, nullptr);
+
 		vkDestroyDevice(s_Data.LogicalDevice, nullptr);
 
 		vkDestroySurfaceKHR(s_Data.Instance, s_Data.WindowSurface, nullptr);
