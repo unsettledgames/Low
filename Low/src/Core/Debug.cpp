@@ -17,7 +17,7 @@ namespace Low
 		std::vector<const char*> ValidationLayers;
 
 		VkInstance ReferenceInstance;
-	} s_Data;
+	} s_DebugData;
 
 	static bool ValidationLayersSupported()
 	{
@@ -27,7 +27,7 @@ namespace Low
 		std::vector<VkLayerProperties> availableLayers(layerCount);
 		vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
 
-		for (auto layer : s_Data.ValidationLayers)
+		for (auto layer : s_DebugData.ValidationLayers)
 		{
 			bool found = false;
 			for (auto& props : availableLayers)
@@ -65,7 +65,7 @@ namespace Low
 		VkDebugUtilsMessengerCreateInfoEXT createInfo{};
 		Debug::GetCreateInfo(createInfo);
 
-		if (CreateDebugUtilsMessengerEXT(s_Data.ReferenceInstance, &createInfo, nullptr, &s_Data.DebugMessenger) != VK_SUCCESS)
+		if (CreateDebugUtilsMessengerEXT(s_DebugData.ReferenceInstance, &createInfo, nullptr, &s_DebugData.DebugMessenger) != VK_SUCCESS)
 		{
 			throw std::runtime_error("failed to set up debug messenger!");
 		}
@@ -75,7 +75,7 @@ namespace Low
 	{
 #ifdef LOW_VALIDATION_LAYERS
 		s_ValidationLayers = { "VK_LAYER_KHRONOS_validation" };
-		s_Data.ValidationLayers = s_ValidationLayers;
+		s_DebugData.ValidationLayers = s_ValidationLayers;
 
 		if (!ValidationLayersSupported())
 			std::cout << "Unsupported validation layers" << std::endl << std::endl;
@@ -85,7 +85,7 @@ namespace Low
 	void Debug::InitMessengers(VkInstance instance)
 	{
 #ifdef LOW_VALIDATION_LAYERS
-		s_Data.ReferenceInstance = instance;
+		s_DebugData.ReferenceInstance = instance;
 		SetupDebugMessenger();
 #endif
 	}
@@ -93,7 +93,7 @@ namespace Low
 	void Debug::Shutdown()
 	{
 #ifdef LOW_VALIDATION_LAYERS
-		DestroyDebugUtilsMessengerEXT(s_Data.ReferenceInstance, s_Data.DebugMessenger, nullptr);
+		DestroyDebugUtilsMessengerEXT(s_DebugData.ReferenceInstance, s_DebugData.DebugMessenger, nullptr);
 #endif
 	}
 }

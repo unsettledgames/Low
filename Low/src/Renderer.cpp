@@ -6,6 +6,7 @@
 #include <chrono>
 
 #define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -13,11 +14,12 @@
 #include <Core/Debug.h>
 #include <Renderer.h>
 
-#include <Structures/VertexBuffer.h>
+#include <Structures/Buffer.h>
 #include <Resources/Shader.h>
 
 #include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
+#include <stb_image.h>
 
 
 // This stuff should probably go in a VulkanCore class or something. Then expose globals init and shutdown that initialize and shutdown
@@ -56,17 +58,15 @@ namespace Low
 		std::vector<VkCommandBuffer> CommandBuffers;
 
 		// Buffers
-		VkBuffer VertexBuffer;
-		VkDeviceMemory VertexBufferMemory;
-		VkBuffer IndexBuffer;
-		VkDeviceMemory IndexBufferMemory;
+		Ref<Buffer> VertexBuffer;
+		Ref<Buffer> IndexBuffer;
 
 		// Uniforms
 		VkDescriptorSetLayout DescriptorSetLayout;
 		VkDescriptorPool DescriptorPool;
 		std::vector<VkDescriptorSet> DescriptorSets;
 
-		std::vector<VkBuffer> UniformBuffers;
+		std::vector<Ref<Buffer>> UniformBuffers;
 		std::vector<VkDeviceMemory> UniformBuffersMemory;
 		std::vector<void*> UniformBuffersMapped;
 
@@ -94,6 +94,40 @@ namespace Low
 		glm::mat4 View;
 		glm::mat4 Projection;
 	};
+
+	struct Vertex
+	{
+		glm::vec3 Position;
+		glm::vec4 Color;
+
+		static VkVertexInputBindingDescription GetVertexBindingDescription()
+		{
+			VkVertexInputBindingDescription bindingDescription = {};
+			bindingDescription.binding = 0;
+			bindingDescription.stride = sizeof(Vertex);
+			bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+			return bindingDescription;
+		}
+
+		static std::vector<VkVertexInputAttributeDescription> GetVertexAttributeDescriptions()
+		{
+			std::vector<VkVertexInputAttributeDescription> ret(2);
+
+			ret[0].binding = 0;
+			ret[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+			ret[0].offset = 0;
+			ret[0].location = 0;
+
+			ret[1].binding = 0;
+			ret[1].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+			ret[1].offset = sizeof(glm::vec3);
+			ret[1].location = 1;
+
+			return ret;
+		}
+	};
+
 
 	std::vector<Synch> s_Synch;
 
@@ -720,7 +754,7 @@ namespace Low
 			scissors.offset.x = 0.0f;
 			scissors.offset.y = 0.0f;
 
-			VkBuffer buffers[] = { s_Data.VertexBuffer };
+			VkBuffer buffers[] = { s_Data.VertexBuffer->Handle()};
 			VkDeviceSize offsets[] = { 0 };
 
 			vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, s_Data.GraphicsPipeline);
@@ -729,7 +763,7 @@ namespace Low
 			vkCmdSetScissor(commandBuffer, 0, 1, &scissors);
 
 			vkCmdBindVertexBuffers(commandBuffer, 0, 1, buffers, offsets);
-			vkCmdBindIndexBuffer(commandBuffer, s_Data.IndexBuffer, 0, VK_INDEX_TYPE_UINT16);
+			vkCmdBindIndexBuffer(commandBuffer, s_Data.IndexBuffer->Handle(), 0, VK_INDEX_TYPE_UINT16);
 			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, s_Data.PipelineLayout, 0, 1,
 				&s_Data.DescriptorSets[s_State.CurrentFrame], 0, nullptr);
 
@@ -818,7 +852,8 @@ namespace Low
 		allocInfo.commandPool = s_Data.CommandPool;
 
 		VkCommandBuffer commandBuffer;
-		vkAllocateCommandBuffers(s_Data.LogicalDevice, &allocInfo, &commandBuffer);
+		if (vkAllocateCommandBuffers(s_Data.LogicalDevice, &allocInfo, &commandBuffer) != VK_SUCCESS)
+			throw std::runtime_error("Couldn't allocate CMD buffer");
 
 		VkCommandBufferBeginInfo beginInfo = {};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -845,31 +880,58 @@ namespace Low
 		vkFreeCommandBuffers(s_Data.LogicalDevice, s_Data.CommandPool, 1, &commandBuffer);
 	}
 
-	static void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags props, VkBuffer& buffer, VkDeviceMemory& memory)
+	static void CreateTextureImage()
 	{
-		VkBufferCreateInfo createInfo = {};
-		createInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-		createInfo.size = size;
-		createInfo.usage = usage;
-		createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		int width, height, nChannels;
+		stbi_uc* pixels = stbi_load("../../Assets/Textures/texture.jpg", &width, &height, &nChannels, STBI_rgb_alpha);
+		VkDeviceSize size = width * height * 4;
 
-		if (vkCreateBuffer(s_Data.LogicalDevice, &createInfo, nullptr, &buffer) != VK_SUCCESS)
-			throw std::runtime_error("Couldn't create buffer");
-
-		VkMemoryRequirements memRequirements = {};
-		vkGetBufferMemoryRequirements(s_Data.LogicalDevice, buffer, &memRequirements);
-
-		VkMemoryAllocateInfo allocateInfo = {};
-		allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-		allocateInfo.allocationSize = memRequirements.size;
-		allocateInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits,
+		// Read image and store data into buffers
+		Buffer stagingBuffer(s_Data.LogicalDevice, s_Data.PhysicalDevice, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
-		if (vkAllocateMemory(s_Data.LogicalDevice, &allocateInfo, nullptr, &memory) != VK_SUCCESS)
-			throw std::runtime_error("Couldn't allocate memory for the vertex buffer");
+		void* data;
+		vkMapMemory(s_Data.LogicalDevice, stagingBuffer.Memory(), 0, size, 0, &data);
+		memcpy(data, pixels, size);
+		vkUnmapMemory(s_Data.LogicalDevice, stagingBuffer.Memory());
 
-		if (vkBindBufferMemory(s_Data.LogicalDevice, buffer, memory, 0) != VK_SUCCESS)
-			throw std::runtime_error("Couldn't bind memory to buffer");
+		stbi_image_free(pixels);
+
+		// Create texture image
+		VkImage textureImage = {};
+		VkDeviceMemory textureMemory = {};
+
+		VkImageCreateInfo texInfo = {};
+		texInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+		texInfo.imageType = VK_IMAGE_TYPE_2D;
+		texInfo.extent.width = width;
+		texInfo.extent.height = height;
+		texInfo.extent.depth = 1;
+		texInfo.mipLevels = 1;
+		texInfo.arrayLayers = 1;
+		texInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+		texInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+		texInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		texInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+		texInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		texInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+		texInfo.flags = 0;
+
+		if (vkCreateImage(s_Data.LogicalDevice, &texInfo, nullptr, &textureImage) != VK_SUCCESS)
+			throw std::runtime_error("Couldn't create texture image");
+
+		VkMemoryRequirements memoryReqs;
+		vkGetImageMemoryRequirements(s_Data.LogicalDevice, textureImage, &memoryReqs);
+
+		VkMemoryAllocateInfo allocInfo = {};
+		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+		allocInfo.allocationSize = memoryReqs.size;
+		allocInfo.memoryTypeIndex = FindMemoryType(memoryReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+		if (vkAllocateMemory(s_Data.LogicalDevice, &allocInfo, nullptr, &textureMemory) != VK_SUCCESS)
+			throw std::runtime_error("Couldn't allocate texture memory");
+
+		vkBindImageMemory(s_Data.LogicalDevice, textureImage, textureMemory, 0);
 	}
 
 	static void CreateVertexBuffer()
@@ -883,23 +945,18 @@ namespace Low
 
 		VkDeviceSize size = sizeof(Vertex) * vertices.size();
 
-		VkBuffer stagingBuffer;
-		VkDeviceMemory stagingMemory;
-
-		CreateBuffer(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			s_Data.VertexBuffer, s_Data.VertexBufferMemory);
-		CreateBuffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			stagingBuffer, stagingMemory);
+		s_Data.VertexBuffer = CreateRef<Buffer>(s_Data.LogicalDevice, s_Data.PhysicalDevice, size, 
+			VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		Buffer stagingBuffer = Buffer(s_Data.LogicalDevice, s_Data.PhysicalDevice, size, 
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		
 		void* data;
-		vkMapMemory(s_Data.LogicalDevice, stagingMemory, 0, size, 0, &data);
+		if (vkMapMemory(s_Data.LogicalDevice, stagingBuffer.Memory(), 0, size, 0, &data) != VK_SUCCESS)
+			std::cout << "Mapping failed" << std::endl;
 		memcpy(data, vertices.data(), (size_t)size);
-		vkUnmapMemory(s_Data.LogicalDevice, stagingMemory);
+		vkUnmapMemory(s_Data.LogicalDevice, stagingBuffer.Memory());
 
-		CopyBuffer(s_Data.VertexBuffer, stagingBuffer, size);
-
-		vkDestroyBuffer(s_Data.LogicalDevice, stagingBuffer, nullptr);
-		vkFreeMemory(s_Data.LogicalDevice, stagingMemory, nullptr);
+		CopyBuffer(s_Data.VertexBuffer->Handle(), stagingBuffer.Handle(), size);
 	}
 
 	static void CreateIndexBuffer()
@@ -907,23 +964,17 @@ namespace Low
 		const std::vector<uint16_t> indices = { 0, 1, 2, 2, 3, 0 };
 		VkDeviceSize size = sizeof(uint16_t) * indices.size();
 
-		VkBuffer stagingBuffer;
-		VkDeviceMemory stagingMemory;
-
-		CreateBuffer(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			s_Data.IndexBuffer, s_Data.IndexBufferMemory);
-		CreateBuffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			stagingBuffer, stagingMemory);
+		s_Data.IndexBuffer = CreateRef<Buffer>(s_Data.LogicalDevice, s_Data.PhysicalDevice, size,
+			VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		Buffer stagingBuffer = Buffer(s_Data.LogicalDevice, s_Data.PhysicalDevice, size, 
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 		void* data;
-		vkMapMemory(s_Data.LogicalDevice, stagingMemory, 0, size, 0, &data);
+		vkMapMemory(s_Data.LogicalDevice, stagingBuffer.Memory(), 0, size, 0, &data);
 		memcpy(data, indices.data(), (size_t)size);
-		vkUnmapMemory(s_Data.LogicalDevice, stagingMemory);
+		vkUnmapMemory(s_Data.LogicalDevice, stagingBuffer.Memory());
 
-		CopyBuffer(s_Data.IndexBuffer, stagingBuffer, size);
-
-		vkDestroyBuffer(s_Data.LogicalDevice, stagingBuffer, nullptr);
-		vkFreeMemory(s_Data.LogicalDevice, stagingMemory, nullptr);
+		CopyBuffer(s_Data.IndexBuffer->Handle(), stagingBuffer.Handle(), size);
 	}
 
 	static void CreateUniformBuffers()
@@ -936,9 +987,9 @@ namespace Low
 
 		for (uint32_t i = 0; i < s_Config.MaxFramesInFlight; i++)
 		{
-			CreateBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-				| VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, s_Data.UniformBuffers[i], s_Data.UniformBuffersMemory[i]);
-			vkMapMemory(s_Data.LogicalDevice, s_Data.UniformBuffersMemory[i], 0, bufferSize, 0, &s_Data.UniformBuffersMapped[i]);
+			s_Data.UniformBuffers[i] = CreateRef<Buffer>(s_Data.LogicalDevice, s_Data.PhysicalDevice, bufferSize, 
+				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+			vkMapMemory(s_Data.LogicalDevice, s_Data.UniformBuffers[i]->Memory(), 0, bufferSize, 0, &s_Data.UniformBuffersMapped[i]);
 		}
 	}
 
@@ -974,7 +1025,7 @@ namespace Low
 		for (uint32_t i = 0; i < s_Config.MaxFramesInFlight; i++)
 		{
 			VkDescriptorBufferInfo bufferInfo = {};
-			bufferInfo.buffer = s_Data.UniformBuffers[i];
+			bufferInfo.buffer = s_Data.UniformBuffers[i]->Handle();
 			bufferInfo.offset = 0;
 			bufferInfo.range = sizeof(UniformBufferObject);
 
@@ -1059,6 +1110,7 @@ namespace Low
 		CreateCommandPool();
 		CreateCommandBuffers();
 		
+		CreateTextureImage();
 		CreateVertexBuffer();
 		CreateIndexBuffer();
 
@@ -1145,17 +1197,6 @@ namespace Low
 			vkDestroyFence(s_Data.LogicalDevice, s_Synch[i].FenInFlight, nullptr);
 		}
 
-		// Delete buffers
-		vkDestroyBuffer(s_Data.LogicalDevice, s_Data.VertexBuffer, nullptr);
-		vkFreeMemory(s_Data.LogicalDevice, s_Data.VertexBufferMemory, nullptr);
-		vkDestroyBuffer(s_Data.LogicalDevice, s_Data.IndexBuffer, nullptr);
-		vkFreeMemory(s_Data.LogicalDevice, s_Data.IndexBufferMemory, nullptr);
-
-		for (uint32_t i = 0; i < s_Config.MaxFramesInFlight; i++)
-		{
-			vkDestroyBuffer(s_Data.LogicalDevice, s_Data.UniformBuffers[i], nullptr);
-			vkFreeMemory(s_Data.LogicalDevice, s_Data.UniformBuffersMemory[i], nullptr);
-		}
 		vkDestroyDescriptorPool(s_Data.LogicalDevice, s_Data.DescriptorPool, nullptr);
 		vkDestroyDescriptorSetLayout(s_Data.LogicalDevice, s_Data.DescriptorSetLayout, nullptr);
 

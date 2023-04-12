@@ -5,7 +5,9 @@ set(CMAKE_CXX_STANDARD 17)
 
 file(GLOB_RECURSE LOW_SRC
 	"src/*.h",
-	"src/*.cpp"
+	"src/*.cpp",
+	"vendor/stb/stb_image.h",
+	"vendor/stb/stb_impl.cpp"
 )
 
 link_directories(${VULKAN_SDK_DIR}/Lib)
@@ -21,6 +23,7 @@ target_include_directories(Low
 	PUBLIC vendor/GLFW/include
 	PUBLIC vendor/imgui
 	PUBLIC ${VULKAN_SDK_DIR}/Include
+	PUBLIC vendor/stb
 )
 
 
