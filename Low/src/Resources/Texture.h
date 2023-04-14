@@ -18,6 +18,7 @@ namespace Low
 		inline VkImage Handle() { return m_Image; }
 		inline VkDeviceMemory Memory() { return m_Memory; }
 		inline VkSampler* Sampler() { return &m_Sampler; }
+		inline VkImageView ImageView() { return m_ImageView; }
 		VkBuffer Buffer();
 
 		inline uint32_t GetWidth() { return m_Width; }

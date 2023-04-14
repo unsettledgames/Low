@@ -111,6 +111,7 @@ namespace Low
 	{
 		glm::vec3 Position;
 		glm::vec4 Color;
+		glm::vec2 TexCoord;
 
 		static VkVertexInputBindingDescription GetVertexBindingDescription()
 		{
@@ -124,7 +125,7 @@ namespace Low
 
 		static std::vector<VkVertexInputAttributeDescription> GetVertexAttributeDescriptions()
 		{
-			std::vector<VkVertexInputAttributeDescription> ret(2);
+			std::vector<VkVertexInputAttributeDescription> ret(3);
 
 			ret[0].binding = 0;
 			ret[0].format = VK_FORMAT_R32G32B32_SFLOAT;
@@ -135,6 +136,11 @@ namespace Low
 			ret[1].format = VK_FORMAT_R32G32B32A32_SFLOAT;
 			ret[1].offset = sizeof(glm::vec3);
 			ret[1].location = 1;
+
+			ret[2].binding = 0;
+			ret[2].format = VK_FORMAT_R32G32_SFLOAT;
+			ret[2].offset = sizeof(glm::vec4) + sizeof(glm::vec3);
+			ret[2].location = 2;
 
 			return ret;
 		}
@@ -480,12 +486,11 @@ namespace Low
 	{
 		VkCommandBufferAllocateInfo allocInfo{};
 		VkCommandBuffer commandBuffer;
-		s_Data.CommandBuffers.resize(s_Config.MaxFramesInFlight);
 
 		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 		allocInfo.commandPool = s_Data.CommandPool;
 		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		allocInfo.commandBufferCount = s_Data.CommandBuffers.size();
+		allocInfo.commandBufferCount = 1;
 
 		if (vkAllocateCommandBuffers(s_Data.LogicalDevice, &allocInfo, &commandBuffer) != VK_SUCCESS) {
 			throw std::runtime_error("Couldn't allocate command buffers");
@@ -494,7 +499,8 @@ namespace Low
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-		vkBeginCommandBuffer(commandBuffer, &beginInfo);
+		if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS)
+			throw std::runtime_error("Couldn't begin cmd buffer");
 
 		return commandBuffer;
 	}
@@ -690,8 +696,6 @@ namespace Low
 
 		VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
 		pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		pipelineLayoutInfo.setLayoutCount = 0;
-		pipelineLayoutInfo.pSetLayouts = nullptr;
 		pipelineLayoutInfo.pushConstantRangeCount = 0;
 		pipelineLayoutInfo.pPushConstantRanges = nullptr;
 		pipelineLayoutInfo.setLayoutCount = 1;
@@ -913,10 +917,10 @@ namespace Low
 	static void CreateVertexBuffer()
 	{
 		const std::vector<Vertex> vertices = {
-			{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},
-			{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f, 1.0f}},
-			{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}},
-			{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}}
+			{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},
+			{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},
+			{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
+			{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
 		};
 
 		VkDeviceSize size = sizeof(Vertex) * vertices.size();
@@ -1008,18 +1012,31 @@ namespace Low
 			bufferInfo.offset = 0;
 			bufferInfo.range = sizeof(UniformBufferObject);
 
-			VkWriteDescriptorSet descriptorWrite = {};
-			descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			descriptorWrite.dstSet = s_Data.DescriptorSets[i];
-			descriptorWrite.dstBinding = 0;
-			descriptorWrite.dstArrayElement = 0;
-			descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			descriptorWrite.descriptorCount = 1;
-			descriptorWrite.pBufferInfo = &bufferInfo;
-			descriptorWrite.pImageInfo = nullptr;
-			descriptorWrite.pTexelBufferView = nullptr;
+			VkDescriptorImageInfo samplerInfo = {};
+			samplerInfo.sampler = *s_Data.Resources->Texture->Sampler();
+			samplerInfo.imageView = s_Data.Resources->Texture->ImageView();
+			samplerInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-			vkUpdateDescriptorSets(s_Data.LogicalDevice, 1, &descriptorWrite, 0, nullptr);
+			std::array<VkWriteDescriptorSet, 2> descriptorWrites({});
+
+			descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptorWrites[0].dstSet = s_Data.DescriptorSets[i];
+			descriptorWrites[0].dstBinding = 0;
+			descriptorWrites[0].dstArrayElement = 0;
+			descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			descriptorWrites[0].descriptorCount = 1;
+			descriptorWrites[0].pBufferInfo = &bufferInfo;
+			descriptorWrites[0].pNext = VK_NULL_HANDLE;
+
+			descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptorWrites[1].dstSet = s_Data.DescriptorSets[i];
+			descriptorWrites[1].dstBinding = 1;
+			descriptorWrites[1].dstArrayElement = 0;
+			descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			descriptorWrites[1].descriptorCount = 1;
+			descriptorWrites[1].pImageInfo = &samplerInfo;
+
+			vkUpdateDescriptorSets(s_Data.LogicalDevice, descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);
 		}
 	}
 
@@ -1057,7 +1074,7 @@ namespace Low
 		samplerBinding.descriptorCount = 1;
 		samplerBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		samplerBinding.pImmutableSamplers = nullptr;
-		samplerBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+		samplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
 		std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboBinding, samplerBinding };
 
