@@ -7,6 +7,7 @@ file(GLOB_RECURSE LOW_SRC
 	"src/*.h",
 	"src/*.cpp",
 	"vendor/stb/stb_image.h",
+	"vendor/tiny_obj/tiny_obj_loader.h",
 	"vendor/stb/stb_impl.cpp"
 )
 
@@ -16,6 +17,11 @@ add_library(Low STATIC ${LOW_SRC})
 add_subdirectory(vendor/glm)
 add_subdirectory(vendor/GLFW)
 
+
+target_precompile_headers(Low
+	PRIVATE src/Lowpch.h
+)
+
 target_include_directories(Low 
 	PUBLIC src
 	PUBLIC ${Vulkan_INCLUDE_DIRS}
@@ -24,6 +30,7 @@ target_include_directories(Low
 	PUBLIC vendor/imgui
 	PUBLIC ${VULKAN_SDK_DIR}/Include
 	PUBLIC vendor/stb
+	PUBLIC vendor/tiny_obj
 )
 
 

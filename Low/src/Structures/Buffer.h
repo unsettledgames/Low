@@ -17,9 +17,13 @@ namespace Low
 		inline VkBuffer& Handle() { return m_Buffer; }
 		inline VkDeviceMemory& Memory() { return m_Memory; }
 
+		inline size_t Size() { return m_Size; }
+
 	private:
 		VkBuffer m_Buffer;
 		VkDevice m_Device;
 		VkDeviceMemory m_Memory;
+
+		size_t m_Size;
 	};
 }

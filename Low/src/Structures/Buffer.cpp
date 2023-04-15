@@ -2,12 +2,11 @@
 #include <Hardware/Memory.h>
 
 #include <stdexcept>
-#include <vulkan/vulkan.h>
 
 namespace Low
 {
 	Buffer::Buffer(VkDevice device, VkPhysicalDevice physDevice, uint32_t size, VkBufferUsageFlags usage,
-		VkMemoryPropertyFlags memoryProps) : m_Device(device)
+		VkMemoryPropertyFlags memoryProps) : m_Device(device), m_Size(size)
 	{
 		VkBufferCreateInfo createInfo = {};
 		createInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
