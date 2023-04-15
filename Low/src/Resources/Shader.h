@@ -1,10 +1,5 @@
 #pragma once
 
-#include <string>
-#include <vector>
-
-#include <vulkan/vulkan.h>
-
 namespace Low
 {
 	class Shader

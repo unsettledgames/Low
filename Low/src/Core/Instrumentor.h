@@ -1,12 +1,12 @@
 #pragma once
 
-#include <string>
+#define LOW_PROFILE
+
 #include <fstream>
 #include <chrono>
 #include <thread>
-#include <algorithm>
 
-namespace Debut
+namespace Low
 {
     struct ProfileResult
     {
@@ -124,14 +124,14 @@ namespace Debut
 }
 
 
-#ifdef DBT_PROFILE
-    #define DBT_PROFILE_BEGIN_SESSION(name, filepath) ::Debut::Instrumentor::Get().BeginSession(name,filepath)
-    #define DBT_PROFILE_END_SESSION() ::Debut::Instrumentor::Get().EndSession()
-    #define DBT_PROFILE_SCOPE(name) ::Debut::InstrumentationTimer timer##__LINE__(name);
-    #define DBT_PROFILE_FUNCTION() DBT_PROFILE_SCOPE(__FUNCSIG__)
+#ifdef LOW_PROFILE
+    #define LOW_PROFILE_BEGIN_SESSION(name, filepath) ::Low::Instrumentor::Get().BeginSession(name,filepath)
+    #define LOW_PROFILE_END_SESSION() ::Low::Instrumentor::Get().EndSession()
+    #define LOW_PROFILE_SCOPE(name) ::Low::InstrumentationTimer timer##__LINE__(name);
+    #define LOW_PROFILE_FUNCTION() LOW_PROFILE_SCOPE(__FUNCSIG__)
 #else
-    #define DBT_PROFILE_BEGIN_SESSION(name, filepath)
-    #define DBT_PROFILE_END_SESSION()
-    #define DBT_PROFILE_FUNCTION()
-    #define DBT_PROFILE_SCOPE(name)
+    #define LOW_PROFILE_BEGIN_SESSION(name, filepath)
+    #define LOW_PROFILE_END_SESSION()
+    #define LOW_PROFILE_FUNCTION()
+    #define LOW_PROFILE_SCOPE(name)
 #endif

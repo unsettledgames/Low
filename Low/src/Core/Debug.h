@@ -1,9 +1,6 @@
 #pragma once
 
-#include <vulkan/vulkan.h>
-
 #include <iostream>
-#include <vector>
 
 #define LOW_VALIDATION_LAYERS
 

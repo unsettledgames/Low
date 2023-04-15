@@ -1,9 +1,7 @@
 #include <iostream>
-#include <vector>
 #include <array>
 #include <optional>
 #include <set>
-#include <algorithm>
 #include <chrono>
 
 #define GLM_FORCE_RADIANS
@@ -12,7 +10,6 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-#include <Core/Core.h>
 #include <Core/Debug.h>
 #include <Renderer.h>
 
@@ -24,7 +21,6 @@
 #include <Resources/Texture.h>
 #include <Resources/Shader.h>
 
-#include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
 #include <stb_image.h>
 

@@ -1,10 +1,5 @@
 #pragma once
 
-#include <Core/Core.h>
-
-#include <string>
-#include <vulkan/vulkan.h>
-
 namespace Low
 {
 	class Buffer;

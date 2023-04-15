@@ -5,7 +5,6 @@
 #include <fstream>
 
 #include <shaderc/shaderc.hpp>
-#include <vulkan/vulkan.h>
 
 // TODO: store bytecode somewhere instead of reloading it from scratch every time
 // https://gist.github.com/sortofsleepy/a7fcb8221f70cab37e82f3779e78aaa5

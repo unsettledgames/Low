@@ -1,11 +1,5 @@
 #include <Core/Debug.h>
-
-#include <vulkan/vulkan.h>
-
-#include <string>
-#include <vector>
 #include <iostream>
-
 
 namespace Low
 {
