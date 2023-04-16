@@ -1238,7 +1238,7 @@ namespace Low
 	{
 		VulkanCoreConfig coreConfig;
 		for (uint32_t i = 0; i < config.ExtensionCount; i++)
-			coreConfig.Extensions.push_back(config.Extensions[i]);
+			coreConfig.UserExtensions.push_back(config.Extensions[i]);
 		coreConfig.WindowHandle = windowHandle;
 
 		s_Config = config;
@@ -1249,11 +1249,12 @@ namespace Low
 		
 		s_Data.Instance = VulkanCore::Instance();
 		s_Data.PhysicalDevice = VulkanCore::PhysicalDevice();
+		s_Data.LogicalDevice = VulkanCore::Device();
 		s_Data.WindowSurface = VulkanCore::Surface();
+		s_Data.GraphicsQueue = VulkanCore::GraphicsQueue();
+		s_Data.PresentationQueue = VulkanCore::PresentQueue();
 
 		glfwSetFramebufferSizeCallback(windowHandle, OnFramebufferResize);
-
-		CreateLogicalDevice();
 
 		CreateSwapchain();
 		CreateImageViews();

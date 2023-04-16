@@ -12,6 +12,9 @@ namespace Low
 		VkDevice Device = VK_NULL_HANDLE;
 		VkPhysicalDevice PhysicalDevice = VK_NULL_HANDLE;
 		VkSurfaceKHR WindowSurface = VK_NULL_HANDLE;
+		
+		VkQueue GraphicsQueue = VK_NULL_HANDLE;
+		VkQueue PresentQueue = VK_NULL_HANDLE;
 
 		VulkanCoreConfig Config = {};
 	} s_VulkanCoreData;
@@ -28,8 +31,8 @@ namespace Low
 			&s_VulkanCoreData.WindowSurface) != VK_SUCCESS)
 			throw std::runtime_error("failed to create window surface!");
 
-		CreateLogicalDevice();
 		PickPhysicalDevice();
+		CreateLogicalDevice();
 	}
 
 	void VulkanCore::CreateInstance()
@@ -55,8 +58,8 @@ namespace Low
 		createInfo.pApplicationInfo = &appInfo;
 		createInfo.pNext = &debugInfo;
 
-		createInfo.enabledExtensionCount = s_VulkanCoreData.Config.Extensions.size();
-		createInfo.ppEnabledExtensionNames = s_VulkanCoreData.Config.Extensions.data();
+		createInfo.enabledExtensionCount = s_VulkanCoreData.Config.UserExtensions.size();
+		createInfo.ppEnabledExtensionNames = s_VulkanCoreData.Config.UserExtensions.data();
 
 #ifndef LOW_VALIDATION_LAYERS
 		createInfo.enabledLayerCount = 0;
@@ -74,7 +77,51 @@ namespace Low
 
 	void VulkanCore::CreateLogicalDevice()
 	{
+		QueueFamilyIndices indices = Support::GetQueueFamilyIndices(PhysicalDevice(), Surface());
+		float priority = 1.0f;
 
+		std::vector<VkDeviceQueueCreateInfo> queueCreateInfo;
+		std::set<uint32_t> queueFamilies = { indices.Graphics.value(), indices.Presentation.value() };
+
+		VkDeviceCreateInfo createInfo = {};
+
+		for (uint32_t family : queueFamilies)
+		{
+			VkDeviceQueueCreateInfo queueInfo = {};
+
+			queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+			queueInfo.queueFamilyIndex = family;
+			queueInfo.queueCount = 1;
+			queueInfo.pQueuePriorities = &priority;
+
+			queueCreateInfo.push_back(queueInfo);
+		}
+
+		VkPhysicalDeviceFeatures deviceFeatures = {};
+		deviceFeatures.samplerAnisotropy = VK_TRUE;
+
+		createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+		createInfo.pQueueCreateInfos = queueCreateInfo.data();
+		createInfo.queueCreateInfoCount = queueCreateInfo.size();
+		createInfo.pEnabledFeatures = &deviceFeatures;
+
+		createInfo.enabledExtensionCount = s_VulkanCoreData.Config.LowExtensions.size();
+		createInfo.ppEnabledExtensionNames = s_VulkanCoreData.Config.LowExtensions.data();
+
+#ifdef LOW_VALIDATION_LAYERS
+		auto layers = Debug::GetValidationLayers();
+		createInfo.enabledLayerCount = layers.size();
+		createInfo.ppEnabledLayerNames = layers.data();
+#else
+		createInfo.enabledLayerCount = 0;
+#endif
+
+		auto err = vkCreateDevice(PhysicalDevice(), &createInfo, nullptr, &s_VulkanCoreData.Device);
+		if (err != VK_SUCCESS)
+			std::cerr << "Failed creating logical device" << std::endl;
+
+		vkGetDeviceQueue(Device(), indices.Graphics.value(), 0, &s_VulkanCoreData.GraphicsQueue);
+		vkGetDeviceQueue(Device(), indices.Presentation.value(), 0, &s_VulkanCoreData.PresentQueue);
 	}
 
 	void VulkanCore::PickPhysicalDevice()
@@ -90,7 +137,7 @@ namespace Low
 
 		for (auto device : physicalDevices)
 		{
-			float score = Support::GetPhysicalDeviceScore(device, Surface(), s_VulkanCoreData.Config.Extensions);
+			float score = Support::GetPhysicalDeviceScore(device, Surface(), s_VulkanCoreData.Config.UserExtensions);
 			if (score > currScore)
 			{
 				currScore = score;
@@ -121,6 +168,16 @@ namespace Low
 	VkSurfaceKHR VulkanCore::Surface()
 	{
 		return s_VulkanCoreData.WindowSurface;
+	}
+
+	VkQueue VulkanCore::GraphicsQueue()
+	{
+		return s_VulkanCoreData.GraphicsQueue;
+	}
+
+	VkQueue VulkanCore::PresentQueue()
+	{
+		return s_VulkanCoreData.PresentQueue;
 	}
 
 }

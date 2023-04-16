@@ -6,7 +6,8 @@ namespace Low
 {
 	struct VulkanCoreConfig
 	{
-		std::vector<const char*> Extensions;
+		std::vector<const char*> UserExtensions;
+		std::vector<const char*> LowExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 		GLFWwindow* WindowHandle;
 	};
 
@@ -17,6 +18,10 @@ namespace Low
 		static VkDevice Device();
 		static VkPhysicalDevice PhysicalDevice();
 		static VkSurfaceKHR Surface();
+
+		// [TMP]
+		static VkQueue GraphicsQueue();
+		static VkQueue PresentQueue();
 
 		static void Init(const VulkanCoreConfig& config);
 
