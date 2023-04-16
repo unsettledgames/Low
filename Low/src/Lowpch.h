@@ -31,4 +31,5 @@
 #include <Core/Instrumentor.h>
 
 // Third party
+#include <glm/glm.hpp>
 #include <Vulkan/vulkan.h>

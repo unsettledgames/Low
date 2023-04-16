@@ -72,4 +72,22 @@ namespace Low
 
 		return ret;
 	}
+
+	SwapchainSupportDetails Support::GetSwapchainSupportDetails(VkPhysicalDevice device, VkSurfaceKHR surface)
+	{
+		SwapchainSupportDetails ret;
+		vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &ret.Capabilities);
+
+		uint32_t formatCount;
+		vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
+		ret.Formats.resize(formatCount);
+		vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, ret.Formats.data());
+
+		uint32_t presentModesCount;
+		vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModesCount, nullptr);
+		ret.PresentModes.resize(presentModesCount);
+		vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModesCount, ret.PresentModes.data());
+
+		return ret;
+	}
 }
