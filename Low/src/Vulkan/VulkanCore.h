@@ -1,14 +1,12 @@
 #pragma once
 
-#include <Lowpch.h>
-
 struct GLFWwindow;
 
 namespace Low
 {
 	struct VulkanCoreConfig
 	{
-		std::vector<char*> Extensions;
+		std::vector<const char*> Extensions;
 		GLFWwindow* WindowHandle;
 	};
 
@@ -24,7 +22,7 @@ namespace Low
 
 	private:
 		static void CreateInstance();
-		static void CreatePhysicalDevice();
+		static void PickPhysicalDevice();
 		static void CreateLogicalDevice();
 	};
 }

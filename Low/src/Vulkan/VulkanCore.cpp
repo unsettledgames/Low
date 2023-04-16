@@ -1,5 +1,6 @@
 #include <Vulkan/VulkanCore.h>
 #include <Core/Debug.h>
+#include <Hardware/Support.h>
 
 #include <GLFW/glfw3.h>
 
@@ -28,7 +29,7 @@ namespace Low
 			throw std::runtime_error("failed to create window surface!");
 
 		CreateLogicalDevice();
-		CreatePhysicalDevice();
+		PickPhysicalDevice();
 	}
 
 	void VulkanCore::CreateInstance()
@@ -69,6 +70,37 @@ namespace Low
 		VkResult ret = vkCreateInstance(&createInfo, nullptr, &s_VulkanCoreData.Instance);
 		if (ret != VK_SUCCESS)
 			std::cout << "Instance creation failure: " << ret << std::endl;
+	}
+
+	void VulkanCore::CreateLogicalDevice()
+	{
+
+	}
+
+	void VulkanCore::PickPhysicalDevice()
+	{
+		uint32_t deviceCount = 0;
+		vkEnumeratePhysicalDevices(Instance(), &deviceCount, nullptr);
+
+		std::vector<VkPhysicalDevice> physicalDevices(deviceCount);
+		vkEnumeratePhysicalDevices(Instance(), &deviceCount, physicalDevices.data());
+
+		VkPhysicalDevice bestDevice = VK_NULL_HANDLE;
+		float currScore = -1;
+
+		for (auto device : physicalDevices)
+		{
+			float score = Support::GetPhysicalDeviceScore(device, Surface(), s_VulkanCoreData.Config.Extensions);
+			if (score > currScore)
+			{
+				currScore = score;
+				bestDevice = device;
+			}
+		}
+
+		if (bestDevice == VK_NULL_HANDLE)
+			std::cerr << "Couldn't find a suitable GPU" << std::endl;
+		s_VulkanCoreData.PhysicalDevice = bestDevice;
 	}
 
 	VkDevice VulkanCore::Device()

@@ -11,6 +11,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <Core/Debug.h>
+#include <Vulkan/VulkanCore.h>
 #include <Renderer.h>
 
 #include <Hardware/Memory.h>
@@ -178,51 +179,6 @@ namespace Low
 		return ret;
 	}
 
-	static void CreateVkInstance(const char** extensions, uint32_t nExtensions)
-	{
-		uint32_t extensionCount = 0;
-		vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
-		std::vector<VkExtensionProperties> vkextensions(extensionCount);
-		vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, vkextensions.data());
-		std::cout << "available extensions:\n";
-
-		for (const auto& extension : vkextensions) {
-			std::cout << '\t' << extension.extensionName << '\n';
-		}
-
-		VkApplicationInfo appInfo = {};
-		appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-		appInfo.pApplicationName = "LowRenderer";
-		appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-		appInfo.pEngineName = "No Engine";
-		appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-		appInfo.apiVersion = VK_API_VERSION_1_3;
-
-		VkInstanceCreateInfo createInfo = {};
-		VkDebugUtilsMessengerCreateInfoEXT debugInfo = {};
-		Debug::GetCreateInfo(debugInfo);
-
-		createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-		createInfo.pApplicationInfo = &appInfo;
-		createInfo.pNext = &debugInfo;
-
-		createInfo.enabledExtensionCount = nExtensions;
-		createInfo.ppEnabledExtensionNames = extensions;
-
-#ifndef LOW_VALIDATION_LAYERS
-		createInfo.enabledLayerCount = 0;
-#else
-		auto layers = Debug::GetValidationLayers();
-		createInfo.enabledLayerCount = layers.size();
-		createInfo.ppEnabledLayerNames = layers.data();
-
-#endif
-
-		VkResult ret = vkCreateInstance(&createInfo, nullptr, &s_Data.Instance);
-		if (ret != VK_SUCCESS)
-			std::cout << "Instance creation failure: " << ret << std::endl;
-	}
-
 	static float GetPhysicalDeviceScore(VkPhysicalDevice device)
 	{
 		float ret = 0;
@@ -295,32 +251,6 @@ namespace Low
 		);
 	}
 
-	static void PickPhysicalDevice()
-	{
-		uint32_t deviceCount = 0;
-		vkEnumeratePhysicalDevices(s_Data.Instance, &deviceCount, nullptr);
-
-		std::vector<VkPhysicalDevice> physicalDevices(deviceCount);
-		vkEnumeratePhysicalDevices(s_Data.Instance, &deviceCount, physicalDevices.data());
-
-		VkPhysicalDevice bestDevice = VK_NULL_HANDLE;
-		float currScore = -1;
-
-		for (auto device : physicalDevices)
-		{
-			float score = GetPhysicalDeviceScore(device);
-			if (score > currScore)
-			{
-				currScore = score;
-				bestDevice = device;
-			}
-		}
-
-		if (bestDevice == VK_NULL_HANDLE)
-			std::cerr << "Couldn't find a suitable GPU" << std::endl;
-		s_Data.PhysicalDevice = bestDevice;
-	}
-
 	static void CreateLogicalDevice()
 	{
 		QueueFamilyIndices indices = GetQueueFamilyIndices(s_Data.PhysicalDevice);
@@ -368,12 +298,6 @@ namespace Low
 
 		vkGetDeviceQueue(s_Data.LogicalDevice, indices.Graphics.value(), 0, &s_Data.GraphicsQueue);
 		vkGetDeviceQueue(s_Data.LogicalDevice, indices.Presentation.value(), 0, &s_Data.PresentationQueue);
-	}
-
-	static void CreateWindowSurface()
-	{
-		if (glfwCreateWindowSurface(s_Data.Instance, s_Data.WindowHandle, nullptr, &s_Data.WindowSurface) != VK_SUCCESS)
-			throw std::runtime_error("failed to create window surface!");
 	}
 
 	static void CreateSwapchain()
@@ -1312,18 +1236,23 @@ namespace Low
 
 	void Renderer::Init(RendererConfig config, GLFWwindow* windowHandle)
 	{
+		VulkanCoreConfig coreConfig;
+		for (uint32_t i = 0; i < config.ExtensionCount; i++)
+			coreConfig.Extensions.push_back(config.Extensions[i]);
+		coreConfig.WindowHandle = windowHandle;
+
 		s_Config = config;
+		s_Data.WindowHandle = windowHandle;
 		s_Data.Resources = new RendererResources();
 
-		s_Data.WindowHandle = windowHandle;
-		glfwSetFramebufferSizeCallback(s_Data.WindowHandle, OnFramebufferResize);
+		VulkanCore::Init(coreConfig);
+		
+		s_Data.Instance = VulkanCore::Instance();
+		s_Data.PhysicalDevice = VulkanCore::PhysicalDevice();
+		s_Data.WindowSurface = VulkanCore::Surface();
 
-		Debug::InitValidationLayers();
-		CreateVkInstance(config.Extensions, config.ExtensionCount);
-		Debug::InitMessengers(s_Data.Instance);
+		glfwSetFramebufferSizeCallback(windowHandle, OnFramebufferResize);
 
-		CreateWindowSurface();
-		PickPhysicalDevice();
 		CreateLogicalDevice();
 
 		CreateSwapchain();

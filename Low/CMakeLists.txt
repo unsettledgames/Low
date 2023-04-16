@@ -17,9 +17,8 @@ add_library(Low STATIC ${LOW_SRC})
 add_subdirectory(vendor/glm)
 add_subdirectory(vendor/GLFW)
 
-
 target_precompile_headers(Low
-	PRIVATE src/Lowpch.h
+	PUBLIC src/Lowpch.h
 )
 
 target_include_directories(Low 

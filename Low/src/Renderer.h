@@ -6,8 +6,6 @@
 	TODO: maybe create a central creation hub? Something to hold the VkInstance and create stuff, something like a VulkanCore class
 */
 
-#include <cstdint>
-
 struct GLFWwindow;
 
 namespace Low
