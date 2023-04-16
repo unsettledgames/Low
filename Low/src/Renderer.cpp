@@ -11,7 +11,11 @@
 #include <Core/Debug.h>
 #include <Vulkan/VulkanCore.h>
 #include <Vulkan/Swapchain.h>
+#include <Vulkan/RenderPass.h>
 
+#include <Vulkan/Descriptor/DescriptorSetLayout.h>
+#include <Vulkan/Descriptor/DescriptorPool.h>
+#include <Vulkan/Descriptor/DescriptorSet.h>
 
 #include <Hardware/Support.h>
 #include <Hardware/Memory.h>
@@ -181,67 +185,6 @@ namespace Low
 		vkQueueWaitIdle(s_Data.GraphicsQueue);
 
 		vkFreeCommandBuffers(s_Data.LogicalDevice, s_Data.CommandPool, 1, &cmdBuffer);
-	}
-
-	static void CreateRenderPass()
-	{
-		VkAttachmentDescription colorAttachment = {};
-		colorAttachment.format = s_Data.SwapchainImageFormat;
-		colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-		colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-		colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-		colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-		VkAttachmentDescription depthAttachment = {};
-		depthAttachment.format = FindDepthFormat();
-		depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-		depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-		depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-		VkAttachmentReference colorAttachmentRef = {};
-		colorAttachmentRef.attachment = 0;
-		colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-		VkAttachmentReference depthAttachmentRef = {};
-		depthAttachmentRef.attachment = 1;
-		depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-		VkSubpassDescription subpass = {};
-		subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-		subpass.colorAttachmentCount = 1;
-		// The index is the index in the glsl shader layout!
-		subpass.pColorAttachments = &colorAttachmentRef;
-		subpass.pDepthStencilAttachment = &depthAttachmentRef;
-
-		VkRenderPassCreateInfo renderPassInfo = {};
-		std::array<VkAttachmentDescription, 2> attachments = { colorAttachment, depthAttachment };
-
-		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-		renderPassInfo.attachmentCount = attachments.size();
-		renderPassInfo.pAttachments = attachments.data();
-		renderPassInfo.subpassCount = 1;
-		renderPassInfo.pSubpasses = &subpass;
-
-		VkSubpassDependency dep = {};
-		dep.srcSubpass = VK_SUBPASS_EXTERNAL;
-		dep.dstSubpass = 0;
-		dep.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-		dep.srcAccessMask = 0;
-		dep.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-		dep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
-		renderPassInfo.dependencyCount = 1;
-		renderPassInfo.pDependencies = &dep;
-
-		if (vkCreateRenderPass(s_Data.LogicalDevice, &renderPassInfo, nullptr, &s_Data.RenderPass))
-			throw std::runtime_error("Failed to create render pass");
 	}
 
 	static void CreateGraphicsPipeline()
@@ -769,25 +712,6 @@ namespace Low
 		}
 	}
 
-	static void CreateDescriptorPool()
-	{
-		std::array<VkDescriptorPoolSize,2> poolSizes = {};
-		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		poolSizes[0].descriptorCount = s_Config.MaxFramesInFlight;
-		
-		poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		poolSizes[1].descriptorCount = s_Config.MaxFramesInFlight;
-
-		VkDescriptorPoolCreateInfo poolInfo = {};
-		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-		poolInfo.poolSizeCount = poolSizes.size();
-		poolInfo.pPoolSizes = poolSizes.data();
-		poolInfo.maxSets = s_Config.MaxFramesInFlight;
-
-		if (vkCreateDescriptorPool(s_Data.LogicalDevice, &poolInfo, nullptr, &s_Data.DescriptorPool) != VK_SUCCESS)
-			throw std::runtime_error("Couldn't create descriptor pool");
-	}
-
 	static void CreateDescriptorSets()
 	{
 		std::vector<VkDescriptorSetLayout> layouts(s_Config.MaxFramesInFlight, s_Data.DescriptorSetLayout);
@@ -854,35 +778,6 @@ namespace Low
 		ubo.Projection[1][1] *= -1;
 
 		memcpy(s_Data.UniformBuffersMapped[currentImage], &ubo, sizeof(UniformBufferObject));
-	}
-	
-	void CreateDescriptorSetLayout()
-	{
-		VkDescriptorSetLayoutBinding uboBinding = {};
-		uboBinding.binding = 0;
-		uboBinding.descriptorCount = 1;
-		uboBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		uboBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-		uboBinding.pImmutableSamplers = nullptr;
-
-		VkDescriptorSetLayoutBinding samplerBinding = {};
-		samplerBinding.binding = 1;
-		samplerBinding.descriptorCount = 1;
-		samplerBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		samplerBinding.pImmutableSamplers = nullptr;
-		samplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-		std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboBinding, samplerBinding };
-
-		VkDescriptorSetLayoutCreateInfo layoutInfo = {};
-		VkPipelineLayout pipelineLayout = {};
-
-		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-		layoutInfo.bindingCount = bindings.size();
-		layoutInfo.pBindings = bindings.data();
-
-		if (vkCreateDescriptorSetLayout(s_Data.LogicalDevice, &layoutInfo, nullptr, &s_Data.DescriptorSetLayout) != VK_SUCCESS)
-			throw std::runtime_error("Couldn't create descriptor set layout");
 	}
 
 	static void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
@@ -973,6 +868,7 @@ namespace Low
 		s_Data.PresentationQueue = VulkanCore::PresentQueue();
 
 		Ref<Swapchain> swapchain = CreateRef<Swapchain>(s_Data.WindowSurface, width, height);
+
 		s_Data.Swapchain = swapchain->Handle();
 		s_Data.SwapchainExtent = { (uint32_t)width, (uint32_t)height };
 		s_Data.SwapchainImageFormat = swapchain->Format();
@@ -980,11 +876,21 @@ namespace Low
 		for (uint32_t i = 0; i < swapchain->ImageViews().size(); i++)
 			s_Data.SwapchainImageViews[i] = swapchain->ImageViews()[i];
 
+		Ref<RenderPass> renderPass = CreateRef<RenderPass>(swapchain->Format(), FindDepthFormat());
+		s_Data.RenderPass = renderPass->Handle();
+
 		glfwSetFramebufferSizeCallback(windowHandle, OnFramebufferResize);
 
-		CreateRenderPass();
-		CreateDescriptorSetLayout();
+		Ref<DescriptorSetLayout> descriptorSetLayout = CreateRef<DescriptorSetLayout>();
+		s_Data.DescriptorSetLayout = descriptorSetLayout->Handle();
+
+		Ref<DescriptorPool> descriptorPool = CreateRef<DescriptorPool>();
+		s_Data.DescriptorPool = descriptorPool->Handle();
+
+		CreateUniformBuffers();
+
 		CreateGraphicsPipeline();
+
 		CreateCommandPool();
 		CreateCommandBuffers();
 
@@ -997,8 +903,6 @@ namespace Low
 		CreateVertexBuffer();
 		CreateIndexBuffer();
 
-		CreateUniformBuffers();
-		CreateDescriptorPool();
 		CreateDescriptorSets();
 
 		CreateSynchronizationObjects();
