@@ -3,16 +3,19 @@
 namespace Low
 {
 	class Shader;
+	class DescriptorSetLayout;
+	class RenderPass;
 
 	class GraphicsPipeline
 	{
 	public:
-		GraphicsPipeline(Ref<Shader> shader, const glm::vec2& size);
+		GraphicsPipeline(Ref<Shader> shader, Ref<DescriptorSetLayout> descLayout, Ref<RenderPass> renderPass, const glm::vec2& size);
 
-		inline VkGraphicsPipeline Handle() { return m_Handle; }
+		inline VkPipeline Handle() { return m_Handle; }
+		inline VkPipelineLayout Layout() { return m_Layout; }
 
 	private:
-		VkGraphicsPipeline m_Handle;
-		VkGraphicsPipelineLayout m_Layout;
+		VkPipeline m_Handle;
+		VkPipelineLayout m_Layout;
 	};
 }

@@ -1,4 +1,5 @@
 #include <Vulkan/GraphicsPipeline.h>
+#include <Vulkan/RenderPass.h>
 #include <Vulkan/Descriptor/DescriptorSetLayout.h>
 #include <Vulkan/VulkanCore.h>
 
@@ -7,7 +8,7 @@
 
 namespace Low
 {
-	GraphicsPipeline::GraphicsPipeline(Ref<Shader> shader, Ref<DescriptorSetLayout> descLayout, const glm::vec2& size)
+	GraphicsPipeline::GraphicsPipeline(Ref<Shader> shader, Ref<DescriptorSetLayout> descLayout, Ref<RenderPass> renderPass, const glm::vec2& size)
 	{
 		VkPipelineShaderStageCreateInfo vertShaderStageInfo = {};
 		vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -142,12 +143,12 @@ namespace Low
 		pipelineCreateInfo.pColorBlendState = &colorBlending;
 		pipelineCreateInfo.pDynamicState = &dynamicState;
 		pipelineCreateInfo.layout = m_Layout;
-		pipelineCreateInfo.renderPass = s_Data.RenderPass;
+		pipelineCreateInfo.renderPass = renderPass->Handle();
 		pipelineCreateInfo.subpass = 0;
 		pipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
 		pipelineCreateInfo.basePipelineIndex = -1;
 
-		if (vkCreateGraphicsPipelines(s_Data.LogicalDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &s_Data.GraphicsPipeline) != VK_SUCCESS)
+		if (vkCreateGraphicsPipelines(VulkanCore::Device(), VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &m_Handle) != VK_SUCCESS)
 			throw std::runtime_error("Couldn't create graphics pipeline");
 	}
 }

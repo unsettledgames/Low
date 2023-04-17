@@ -12,10 +12,14 @@
 #include <Vulkan/VulkanCore.h>
 #include <Vulkan/Swapchain.h>
 #include <Vulkan/RenderPass.h>
+#include <Vulkan/GraphicsPipeline.h>
 
 #include <Vulkan/Descriptor/DescriptorSetLayout.h>
 #include <Vulkan/Descriptor/DescriptorPool.h>
 #include <Vulkan/Descriptor/DescriptorSet.h>
+
+#include <Vulkan/Command/CommandPool.h>
+#include <Vulkan/Command/CommandBuffer.h>
 
 #include <Hardware/Support.h>
 #include <Hardware/Memory.h>
@@ -187,151 +191,6 @@ namespace Low
 		vkFreeCommandBuffers(s_Data.LogicalDevice, s_Data.CommandPool, 1, &cmdBuffer);
 	}
 
-	static void CreateGraphicsPipeline()
-	{
-		s_Data.Resources->Shader = CreateRef<Shader>("basic", s_Data.LogicalDevice);
-		
-		VkPipelineShaderStageCreateInfo vertShaderStageInfo = {};
-		vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-		vertShaderStageInfo.module = s_Data.Resources->Shader->GetVertexModule();
-		vertShaderStageInfo.pName = "main";
-
-		VkPipelineShaderStageCreateInfo fragShaderStageInfo = {};
-		fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-		fragShaderStageInfo.module = s_Data.Resources->Shader->GetFragmentModule();
-		fragShaderStageInfo.pName = "main";
-
-		VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
-		std::vector<VkDynamicState> dynamicStates = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
-
-		VkPipelineDynamicStateCreateInfo dynamicState = {};
-		dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-		dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
-		dynamicState.pDynamicStates = dynamicStates.data();
-
-		VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
-		auto bindingDesc = Vertex::GetVertexBindingDescription();
-		auto attributeDesc = Vertex::GetVertexAttributeDescriptions();
-
-		vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-		vertexInputInfo.vertexBindingDescriptionCount =	1;
-		vertexInputInfo.pVertexBindingDescriptions = &bindingDesc;
-		vertexInputInfo.vertexAttributeDescriptionCount = attributeDesc.size();
-		vertexInputInfo.pVertexAttributeDescriptions = attributeDesc.data();
-
-		VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
-		inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-		inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-		inputAssembly.primitiveRestartEnable = VK_FALSE;
-
-		VkViewport viewport = {};
-		viewport.x = 0.0f;
-		viewport.y = 0.0f;
-		viewport.width = (float)s_Data.SwapchainExtent.width;
-		viewport.height = (float)s_Data.SwapchainExtent.height;
-		viewport.minDepth = 0.0f;
-		viewport.maxDepth = 1.0f;
-
-		VkRect2D scissor = {};
-		scissor.offset = { 0, 0 };
-		scissor.extent = s_Data.SwapchainExtent;
-
-		VkPipelineViewportStateCreateInfo viewportState = {};
-		viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-		viewportState.pScissors = &scissor;
-		viewportState.pViewports = &viewport;
-		viewportState.scissorCount = 1;
-		viewportState.viewportCount = 1;
-
-		VkPipelineDepthStencilStateCreateInfo depthState = {};
-		depthState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-		depthState.depthTestEnable = VK_TRUE;
-		depthState.depthWriteEnable = VK_TRUE;
-		depthState.depthCompareOp = VK_COMPARE_OP_LESS;
-		depthState.stencilTestEnable = VK_FALSE;
-		depthState.front = {};
-		depthState.back = {};
-
-		VkPipelineRasterizationStateCreateInfo rasterizer = {};
-		rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-		rasterizer.depthClampEnable = VK_FALSE;
-		rasterizer.rasterizerDiscardEnable = VK_FALSE;
-		rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-		rasterizer.lineWidth = 1.0f;
-		rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-		rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-		// [SHADOWMAPPING]
-		rasterizer.depthBiasEnable = VK_FALSE;
-		rasterizer.depthBiasConstantFactor = 0.0f; // Optional
-		rasterizer.depthBiasClamp = 0.0f; // Optional
-		rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
-
-		// [ANTIALIASING]
-		VkPipelineMultisampleStateCreateInfo multisampling{};
-		multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-		multisampling.sampleShadingEnable = VK_FALSE;
-		multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-		multisampling.minSampleShading = 1.0f;
-		multisampling.pSampleMask = nullptr;
-		multisampling.alphaToCoverageEnable = VK_FALSE;
-		multisampling.alphaToOneEnable = VK_FALSE;
-
-		VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-		colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-		colorBlendAttachment.blendEnable = VK_FALSE;
-		colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-		colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
-		colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
-		colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-		colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-		colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
-
-		VkPipelineColorBlendStateCreateInfo colorBlending{};
-		colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-		colorBlending.logicOpEnable = VK_FALSE;
-		colorBlending.logicOp = VK_LOGIC_OP_COPY;
-		colorBlending.attachmentCount = 1;
-		colorBlending.pAttachments = &colorBlendAttachment;
-		colorBlending.blendConstants[0] = 0.0f; 
-		colorBlending.blendConstants[1] = 0.0f; 
-		colorBlending.blendConstants[2] = 0.0f; 
-		colorBlending.blendConstants[3] = 0.0f; 
-
-		VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
-		pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		pipelineLayoutInfo.pushConstantRangeCount = 0;
-		pipelineLayoutInfo.pPushConstantRanges = nullptr;
-		pipelineLayoutInfo.setLayoutCount = 1;
-		pipelineLayoutInfo.pSetLayouts = &s_Data.DescriptorSetLayout;
-
-		if (vkCreatePipelineLayout(s_Data.LogicalDevice, &pipelineLayoutInfo, nullptr, &s_Data.PipelineLayout) != VK_SUCCESS)
-			throw std::runtime_error("failed to create pipeline layout!");
-
-		VkGraphicsPipelineCreateInfo pipelineCreateInfo = {};
-		pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-		pipelineCreateInfo.stageCount = 2;
-		pipelineCreateInfo.pStages = shaderStages;
-
-		pipelineCreateInfo.pVertexInputState = &vertexInputInfo;
-		pipelineCreateInfo.pInputAssemblyState = &inputAssembly;
-		pipelineCreateInfo.pViewportState = &viewportState;
-		pipelineCreateInfo.pRasterizationState = &rasterizer;
-		pipelineCreateInfo.pMultisampleState = &multisampling;
-		pipelineCreateInfo.pDepthStencilState = &depthState;
-		pipelineCreateInfo.pColorBlendState = &colorBlending;
-		pipelineCreateInfo.pDynamicState = &dynamicState;
-		pipelineCreateInfo.layout = s_Data.PipelineLayout;
-		pipelineCreateInfo.renderPass = s_Data.RenderPass;
-		pipelineCreateInfo.subpass = 0;
-		pipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
-		pipelineCreateInfo.basePipelineIndex = -1;
-
-		if (vkCreateGraphicsPipelines(s_Data.LogicalDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &s_Data.GraphicsPipeline) != VK_SUCCESS)
-			throw std::runtime_error("Couldn't create graphics pipeline");
-	}
-
 	static void CreateFramebuffer()
 	{
 		s_Data.SwapchainFramebuffers.resize(s_Data.SwapchainImageViews.size());
@@ -350,18 +209,6 @@ namespace Low
 			if (vkCreateFramebuffer(s_Data.LogicalDevice, &framebufferInfo, nullptr, &s_Data.SwapchainFramebuffers[i]) != VK_SUCCESS)
 				throw std::runtime_error("Couldn't create framebuffer");
 		}
-	}
-
-	static void CreateCommandPool()
-	{
-		auto queueIndices = Support::GetQueueFamilyIndices(s_Data.PhysicalDevice, s_Data.WindowSurface);
-		VkCommandPoolCreateInfo commandPoolInfo = {};
-		commandPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-		commandPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-		commandPoolInfo.queueFamilyIndex = queueIndices.Graphics.value();
-
-		if (vkCreateCommandPool(s_Data.LogicalDevice, &commandPoolInfo, nullptr, &s_Data.CommandPool) != VK_SUCCESS)
-			throw std::runtime_error("Couldn't create command pool");
 	}
 
 	static void TransitionImageToLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout)
@@ -481,21 +328,6 @@ namespace Low
 			throw std::runtime_error("Couldn't create image view");
 
 		TransitionImageToLayout(s_Data.DepthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-	}
-
-	static void CreateCommandBuffers()
-	{
-		VkCommandBufferAllocateInfo allocInfo{};
-		s_Data.CommandBuffers.resize(s_Config.MaxFramesInFlight);
-		
-		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		allocInfo.commandPool = s_Data.CommandPool;
-		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		allocInfo.commandBufferCount = s_Data.CommandBuffers.size();
-
-		if (vkAllocateCommandBuffers(s_Data.LogicalDevice, &allocInfo, s_Data.CommandBuffers.data()) != VK_SUCCESS) {
-			throw std::runtime_error("Couldn't allocate command buffers");
-		}
 	}
 
 	static void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
@@ -884,15 +716,23 @@ namespace Low
 		Ref<DescriptorSetLayout> descriptorSetLayout = CreateRef<DescriptorSetLayout>();
 		s_Data.DescriptorSetLayout = descriptorSetLayout->Handle();
 
-		Ref<DescriptorPool> descriptorPool = CreateRef<DescriptorPool>();
+		Ref<DescriptorPool> descriptorPool = CreateRef<DescriptorPool>(s_Config.MaxFramesInFlight);
 		s_Data.DescriptorPool = descriptorPool->Handle();
 
 		CreateUniformBuffers();
 
-		CreateGraphicsPipeline();
+		Ref<Shader> shader = CreateRef<Shader>("basic", s_Data.LogicalDevice);
+		s_Data.Resources->Shader = shader;
+		Ref<GraphicsPipeline> graphicsPipeline = CreateRef<GraphicsPipeline>(shader, descriptorSetLayout, renderPass, glm::vec2(s_Data.SwapchainExtent.width, s_Data.SwapchainExtent.height));
+		s_Data.GraphicsPipeline = graphicsPipeline->Handle();
+		s_Data.PipelineLayout = graphicsPipeline->Layout();
 
-		CreateCommandPool();
-		CreateCommandBuffers();
+		Ref<CommandPool> commandPool = CreateRef<CommandPool>(Support::GetQueueFamilyIndices(s_Data.PhysicalDevice, s_Data.WindowSurface));
+		s_Data.CommandPool = commandPool->Handle();
+
+		std::vector<Ref<CommandBuffer>> commandBuffers = commandPool->AllocateCommandBuffers(s_Config.MaxFramesInFlight);
+		for (auto& buf : commandBuffers)
+			s_Data.CommandBuffers.push_back(buf->Handle());
 
 		CreateDepthResources();
 		CreateFramebuffer();
