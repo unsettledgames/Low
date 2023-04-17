@@ -78,10 +78,10 @@ namespace Low
 		createInfo.imageArrayLayers = 1;
 		createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-		auto indice = Support::GetQueueFamilyIndices(VulkanCore::PhysicalDevice(), createInfo.surface);
-		uint32_t queueFamilyIndices[] = { indice.Graphics.value(), indice.Presentation.value() };
+		auto indices = Support::GetQueueFamilyIndices(VulkanCore::PhysicalDevice(), createInfo.surface);
+		uint32_t queueFamilyIndices[] = { indices.Graphics.value(), indices.Presentation.value() };
 
-		if (indice.Graphics != indice.Presentation)
+		if (indices.Graphics != indices.Presentation)
 		{
 			createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
 			createInfo.queueFamilyIndexCount = 2;
@@ -104,15 +104,11 @@ namespace Low
 		if (res != VK_SUCCESS)
 			std::cerr << "Couldn't create swapchain" << std::endl;
 
-		CreateImages();
+		uint32_t size = m_Images.size();
+		vkGetSwapchainImagesKHR(VulkanCore::Device(), m_Handle, &size, m_Images.data());
 		CreateImageViews();
 	}
 
-	void Swapchain::CreateImages()
-	{
-		uint32_t size = m_Images.size();
-		vkGetSwapchainImagesKHR(VulkanCore::Device(), m_Handle, &size, m_Images.data());
-	}
 
 	void Swapchain::CreateImageViews()
 	{
@@ -120,25 +116,7 @@ namespace Low
 
 		for (uint32_t i = 0; i < m_ImageViews.size(); i++)
 		{
-			VkImageViewCreateInfo createInfo = {};
-			createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-			createInfo.image = m_Images[i];
-			createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-			createInfo.format = m_ImageFormat;
-
-			createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-			createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-			createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-			createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-
-			createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			createInfo.subresourceRange.baseMipLevel = 0;
-			createInfo.subresourceRange.levelCount = 1;
-			createInfo.subresourceRange.baseArrayLayer = 0;
-			createInfo.subresourceRange.layerCount = 1;
-
-			if (vkCreateImageView(VulkanCore::Device(), &createInfo, nullptr, &m_ImageViews[i]) != VK_SUCCESS)
-				throw std::runtime_error("Couldn't create image view");
+			
 		}
 	}
 }

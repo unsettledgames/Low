@@ -24,6 +24,7 @@
 #include <Hardware/Support.h>
 #include <Hardware/Memory.h>
 
+#include <Structures/Framebuffer.h>
 #include <Structures/Buffer.h>
 #include <Structures/Vertex.h>
 
@@ -441,7 +442,7 @@ namespace Low
 
 		//CreateSwapchain();
 		//CreateImageViews();
-		CreateDepthResources();
+		//CreateDepthResources();
 		CreateFramebuffer();
 	}
 
@@ -635,7 +636,6 @@ namespace Low
 		EndOneTimeCommands(cmdBuf);
 	}
 	
-
 	static void CreateTextureImage()
 	{
 		s_Data.Resources->Texture = CreateRef<Texture>("../textures/texture.jpg", s_Data.LogicalDevice, s_Data.PhysicalDevice, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL);
@@ -733,6 +733,11 @@ namespace Low
 		std::vector<Ref<CommandBuffer>> commandBuffers = commandPool->AllocateCommandBuffers(s_Config.MaxFramesInFlight);
 		for (auto& buf : commandBuffers)
 			s_Data.CommandBuffers.push_back(buf->Handle());
+
+		Ref<Framebuffer> framebuffer = CreateRef<Framebuffer>(FramebufferConfig({
+			FramebufferAttachmentConfig(AttachmentType::Color, swapchain->Images()[0], (uint32_t)width, (uint32_t)height, VK_FORMAT_B8G8R8A8_SRGB),
+			FramebufferAttachmentConfig(AttachmentType::Depth, (uint32_t)width, (uint32_t)height, FindDepthFormat())
+		}));
 
 		CreateDepthResources();
 		CreateFramebuffer();
