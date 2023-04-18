@@ -72,6 +72,7 @@ namespace Low
 		std::vector<VkImageView> SwapchainImageViews;
 		std::vector<VkFramebuffer> SwapchainFramebuffers;
 
+		Ref<Low::Swapchain> SwapchainRef;
 		VkFormat SwapchainImageFormat;
 		VkExtent2D SwapchainExtent;
 
@@ -99,6 +100,7 @@ namespace Low
 
 		GLFWwindow* WindowHandle;
 		std::vector<const char*> RequiredExtesions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+		std::vector<Ref<Framebuffer>> Framebuffers;
 
 	} s_Data;
 
@@ -192,26 +194,6 @@ namespace Low
 		vkFreeCommandBuffers(s_Data.LogicalDevice, s_Data.CommandPool, 1, &cmdBuffer);
 	}
 
-	static void CreateFramebuffer()
-	{
-		s_Data.SwapchainFramebuffers.resize(s_Data.SwapchainImageViews.size());
-		for (uint32_t i = 0; i < s_Data.SwapchainFramebuffers.size(); i++)
-		{
-			std::array<VkImageView, 2> attachments = { s_Data.SwapchainImageViews[i], s_Data.DepthImageView };
-			VkFramebufferCreateInfo framebufferInfo{};
-			framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-			framebufferInfo.renderPass = s_Data.RenderPass;
-			framebufferInfo.attachmentCount = attachments.size();
-			framebufferInfo.pAttachments = attachments.data();
-			framebufferInfo.width = s_Data.SwapchainExtent.width;
-			framebufferInfo.height = s_Data.SwapchainExtent.height;
-			framebufferInfo.layers = 1;
-
-			if (vkCreateFramebuffer(s_Data.LogicalDevice, &framebufferInfo, nullptr, &s_Data.SwapchainFramebuffers[i]) != VK_SUCCESS)
-				throw std::runtime_error("Couldn't create framebuffer");
-		}
-	}
-
 	static void TransitionImageToLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout)
 	{
 		VkCommandBuffer cmdBuf = BeginOneTimeCommands();
@@ -276,61 +258,6 @@ namespace Low
 		EndOneTimeCommands(cmdBuf);
 	}
 
-	static void CreateDepthResources()
-	{
-		VkFormat depthFormat = FindDepthFormat();
-
-		VkDeviceSize size = s_Data.SwapchainExtent.width * s_Data.SwapchainExtent.height * 4;
-
-		VkImageCreateInfo texInfo = {};
-		texInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-		texInfo.imageType = VK_IMAGE_TYPE_2D;
-		texInfo.extent.width = s_Data.SwapchainExtent.width;
-		texInfo.extent.height = s_Data.SwapchainExtent.height;
-		texInfo.extent.depth = 1;
-		texInfo.mipLevels = 1;
-		texInfo.arrayLayers = 1;
-		texInfo.format = depthFormat;
-		texInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-		texInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		texInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-		texInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		texInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-		texInfo.flags = 0;
-
-		if (vkCreateImage(s_Data.LogicalDevice, &texInfo, nullptr, &s_Data.DepthImage) != VK_SUCCESS)
-			throw std::runtime_error("Couldn't create texture image");
-
-		VkMemoryRequirements memoryReqs;
-		vkGetImageMemoryRequirements(s_Data.LogicalDevice, s_Data.DepthImage, &memoryReqs);
-
-		VkMemoryAllocateInfo allocInfo = {};
-		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-		allocInfo.allocationSize = memoryReqs.size;
-		allocInfo.memoryTypeIndex = Memory::FindMemoryType(s_Data.PhysicalDevice, memoryReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-		if (vkAllocateMemory(s_Data.LogicalDevice, &allocInfo, nullptr, &s_Data.DepthImageMemory) != VK_SUCCESS)
-			throw std::runtime_error("Couldn't allocate texture memory");
-
-		vkBindImageMemory(s_Data.LogicalDevice, s_Data.DepthImage, s_Data.DepthImageMemory, 0);
-
-		VkImageViewCreateInfo viewInfo{};
-		viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		viewInfo.image = s_Data.DepthImage;
-		viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-		viewInfo.format = depthFormat;
-		viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-		viewInfo.subresourceRange.baseMipLevel = 0;
-		viewInfo.subresourceRange.levelCount = 1;
-		viewInfo.subresourceRange.baseArrayLayer = 0;
-		viewInfo.subresourceRange.layerCount = 1;
-
-		if (vkCreateImageView(s_Data.LogicalDevice, &viewInfo, nullptr, &s_Data.DepthImageView) != VK_SUCCESS)
-			throw std::runtime_error("Couldn't create image view");
-
-		TransitionImageToLayout(s_Data.DepthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-	}
-
 	static void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 	{
 		VkCommandBufferBeginInfo beginInfo{};
@@ -345,7 +272,7 @@ namespace Low
 		VkRenderPassBeginInfo renderPassInfo{};
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 		renderPassInfo.renderPass = s_Data.RenderPass;
-		renderPassInfo.framebuffer = s_Data.SwapchainFramebuffers[imageIndex];
+		renderPassInfo.framebuffer = s_Data.Framebuffers[imageIndex]->Handle();
 		renderPassInfo.renderArea.offset = { 0,0 };
 		renderPassInfo.renderArea.extent = s_Data.SwapchainExtent;
 
@@ -443,7 +370,7 @@ namespace Low
 		//CreateSwapchain();
 		//CreateImageViews();
 		//CreateDepthResources();
-		CreateFramebuffer();
+		//CreateFramebuffer();
 	}
 
 	static void OnFramebufferResize(GLFWwindow* window, int width, int height)
@@ -700,6 +627,7 @@ namespace Low
 		s_Data.PresentationQueue = VulkanCore::PresentQueue();
 
 		Ref<Swapchain> swapchain = CreateRef<Swapchain>(s_Data.WindowSurface, width, height);
+		s_Data.SwapchainRef = swapchain;
 
 		s_Data.Swapchain = swapchain->Handle();
 		s_Data.SwapchainExtent = { (uint32_t)width, (uint32_t)height };
@@ -707,9 +635,6 @@ namespace Low
 		s_Data.SwapchainImageViews.resize(swapchain->ImageViews().size());
 		for (uint32_t i = 0; i < swapchain->ImageViews().size(); i++)
 			s_Data.SwapchainImageViews[i] = swapchain->ImageViews()[i];
-
-		Ref<RenderPass> renderPass = CreateRef<RenderPass>(swapchain->Format(), FindDepthFormat());
-		s_Data.RenderPass = renderPass->Handle();
 
 		glfwSetFramebufferSizeCallback(windowHandle, OnFramebufferResize);
 
@@ -721,12 +646,6 @@ namespace Low
 
 		CreateUniformBuffers();
 
-		Ref<Shader> shader = CreateRef<Shader>("basic", s_Data.LogicalDevice);
-		s_Data.Resources->Shader = shader;
-		Ref<GraphicsPipeline> graphicsPipeline = CreateRef<GraphicsPipeline>(shader, descriptorSetLayout, renderPass, glm::vec2(s_Data.SwapchainExtent.width, s_Data.SwapchainExtent.height));
-		s_Data.GraphicsPipeline = graphicsPipeline->Handle();
-		s_Data.PipelineLayout = graphicsPipeline->Layout();
-
 		Ref<CommandPool> commandPool = CreateRef<CommandPool>(Support::GetQueueFamilyIndices(s_Data.PhysicalDevice, s_Data.WindowSurface));
 		s_Data.CommandPool = commandPool->Handle();
 
@@ -734,13 +653,25 @@ namespace Low
 		for (auto& buf : commandBuffers)
 			s_Data.CommandBuffers.push_back(buf->Handle());
 
-		Ref<Framebuffer> framebuffer = CreateRef<Framebuffer>(FramebufferConfig({
-			FramebufferAttachmentConfig(AttachmentType::Color, swapchain->Images()[0], (uint32_t)width, (uint32_t)height, VK_FORMAT_B8G8R8A8_SRGB),
-			FramebufferAttachmentConfig(AttachmentType::Depth, (uint32_t)width, (uint32_t)height, FindDepthFormat())
-		}));
+		std::vector<FramebufferAttachmentSpecs> attachmentSpecs = {
+			{AttachmentType::Color, VK_FORMAT_R8G8B8A8_SRGB, 1, true},
+			{AttachmentType::Depth, FindDepthFormat(), 1, false}
+		};
 
-		CreateDepthResources();
-		CreateFramebuffer();
+		Ref<RenderPass> renderPass = CreateRef<RenderPass>(attachmentSpecs);
+		s_Data.RenderPass = renderPass->Handle();
+
+		for (uint32_t i = 0; i < s_Data.SwapchainRef->Images().size(); i++)
+		{
+			Ref<Framebuffer> framebuffer = CreateRef<Framebuffer>(renderPass->Handle(), width, height, attachmentSpecs);
+			s_Data.Framebuffers.push_back(framebuffer);
+		}
+
+		Ref<Shader> shader = CreateRef<Shader>("basic", s_Data.LogicalDevice);
+		s_Data.Resources->Shader = shader;
+		Ref<GraphicsPipeline> graphicsPipeline = CreateRef<GraphicsPipeline>(shader, descriptorSetLayout, renderPass, glm::vec2(s_Data.SwapchainExtent.width, s_Data.SwapchainExtent.height));
+		s_Data.GraphicsPipeline = graphicsPipeline->Handle();
+		s_Data.PipelineLayout = graphicsPipeline->Layout();
 		
 		CreateTextureImage();
 		CreateTextureSampler();

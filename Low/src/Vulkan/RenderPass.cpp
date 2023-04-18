@@ -1,51 +1,38 @@
 #include <Vulkan/RenderPass.h>
 #include <Vulkan/VulkanCore.h>
 
+#include <Structures/Framebuffer.h>
+
 namespace Low
 {
-	RenderPass::RenderPass(VkFormat colorFormat, VkFormat depthFormat)
+	RenderPass::RenderPass(const std::vector<FramebufferAttachmentSpecs>& specs)
 	{
-		VkAttachmentDescription colorAttachment = {};
-		colorAttachment.format = colorFormat;
-		colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-		colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-		colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-		colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		std::vector<VkAttachmentDescription> descs;
+		std::vector<VkAttachmentReference> refs;
 
-		VkAttachmentDescription depthAttachment = {};
-		depthAttachment.format = depthFormat;
-		depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-		depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-		depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-		VkAttachmentReference colorAttachmentRef = {};
-		colorAttachmentRef.attachment = 0;
-		colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-		VkAttachmentReference depthAttachmentRef = {};
-		depthAttachmentRef.attachment = 1;
-		depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+		for (uint32_t i = 0; i < specs.size(); i++)
+		{
+			descs.push_back(specs[i].Description);
+			refs.push_back(specs[i].Reference);
+		}
 
 		VkSubpassDescription subpass = {};
 		subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+		subpass.inputAttachmentCount = 0;
+		subpass.pInputAttachments = nullptr;
 		subpass.colorAttachmentCount = 1;
+		subpass.pResolveAttachments = nullptr;
 		// The index is the index in the glsl shader layout!
-		subpass.pColorAttachments = &colorAttachmentRef;
-		subpass.pDepthStencilAttachment = &depthAttachmentRef;
+		subpass.pColorAttachments = refs.data();
+		for (uint32_t i=0; i<refs.size(); i++)
+			if (refs[i].layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+				subpass.pDepthStencilAttachment = &refs[i];
+		subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
 		VkRenderPassCreateInfo renderPassInfo = {};
-		std::array<VkAttachmentDescription, 2> attachments = { colorAttachment, depthAttachment };
-
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-		renderPassInfo.attachmentCount = attachments.size();
-		renderPassInfo.pAttachments = attachments.data();
+		renderPassInfo.attachmentCount = descs.size();
+		renderPassInfo.pAttachments = descs.data();
 		renderPassInfo.subpassCount = 1;
 		renderPassInfo.pSubpasses = &subpass;
 
