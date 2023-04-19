@@ -4,7 +4,8 @@
 
 namespace Low
 {
-	Framebuffer::Framebuffer(VkRenderPass renderPass, uint32_t width, uint32_t height, std::vector<FramebufferAttachmentSpecs>& specs)
+	Framebuffer::Framebuffer(VkRenderPass renderPass, uint32_t width, uint32_t height, std::vector<FramebufferAttachmentSpecs>& specs,
+		std::vector<VkImage> images)
 	{
 		uint32_t attachmentIdx = 0;
 
@@ -12,9 +13,10 @@ namespace Low
 		{
 			FramebufferAttachment attachment;
 			attachment.Specs = config;
+			attachment.Image = images[attachmentIdx];
 
 			// Create image if necessary
-			if (config.IsSwapchain)
+			if (!config.IsSwapchain)
 			{
 				VkImageCreateInfo texInfo = {};
 				texInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -50,7 +52,6 @@ namespace Low
 				vkBindImageMemory(VulkanCore::Device(), attachment.Image, memory, 0);
 				attachment.ImageMemory = memory;
 			}
-			attachment.Image = attachment.Image;
 
 			VkImageViewCreateInfo createInfo = {};
 			createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -81,7 +82,7 @@ namespace Low
 
 		std::vector<VkImageView> attachments(m_Attachments.size());
 		for (uint32_t i = 0; i < attachments.size(); i++)
-			attachments.push_back(m_Attachments[i].ImageView);
+			attachments[i] = m_Attachments[i].ImageView;
 		VkFramebufferCreateInfo framebufferInfo{};
 
 		framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;

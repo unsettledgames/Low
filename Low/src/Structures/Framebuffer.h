@@ -4,30 +4,10 @@ namespace Low
 {
 	enum class AttachmentType {None = 0, Color, Depth};
 
-	struct FramebufferAttachmentConfig
-	{
-		AttachmentType Type = AttachmentType::None;
-
-		VkImage Image = VK_NULL_HANDLE;
-		VkFormat Format = VK_FORMAT_UNDEFINED;
-
-		uint32_t Width = 0;
-		uint32_t Height = 0;
-		uint32_t SampleCount = 1;
-
-		FramebufferAttachmentConfig() = default;
-		// Swapchain attachment
-		FramebufferAttachmentConfig(AttachmentType type, VkImage image, uint32_t width, uint32_t height, VkFormat format) :
-			Type(type), Image(image), Width(width), Height(height), Format(format) {}
-		// User defined attachment
-		FramebufferAttachmentConfig(AttachmentType type, uint32_t width, uint32_t height, VkFormat format, uint32_t nSamples = 1) :
-			Type(type), Format(format), Width(width), Height(height), SampleCount(nSamples) {}
-	};
-
 	struct FramebufferAttachmentSpecs
 	{
 		AttachmentType Type;
-		uint32_t SampleCount;
+		uint32_t SampleCount = 1;
 		bool IsSwapchain;
 		int Index;
 
@@ -37,7 +17,7 @@ namespace Low
 
 		FramebufferAttachmentSpecs() = default;
 		FramebufferAttachmentSpecs(AttachmentType type, VkFormat format, uint32_t samples, bool isSwapchain) :
-			Type(type), SampleCount(samples), IsSwapchain(IsSwapchain), Format(format)
+			Type(type), SampleCount(samples), IsSwapchain(isSwapchain), Format(format)
 		{
 			static int index = 0;
 
@@ -75,6 +55,8 @@ namespace Low
 			else
 				reference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
+			Description = description;
+			Reference = reference;
 			index++;
 		}
 	};
@@ -97,7 +79,8 @@ namespace Low
 	class Framebuffer
 	{
 	public:
-		Framebuffer(VkRenderPass renderPass, uint32_t width, uint32_t height, std::vector<FramebufferAttachmentSpecs>& specs);
+		Framebuffer(VkRenderPass renderPass, uint32_t width, uint32_t height, std::vector<FramebufferAttachmentSpecs>& specs,
+			std::vector<VkImage> images);
 
 		inline VkFramebuffer Handle() { return m_Handle; }
 		inline VkImageView ImageView() { return m_ImageView; }

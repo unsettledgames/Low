@@ -654,7 +654,7 @@ namespace Low
 			s_Data.CommandBuffers.push_back(buf->Handle());
 
 		std::vector<FramebufferAttachmentSpecs> attachmentSpecs = {
-			{AttachmentType::Color, VK_FORMAT_R8G8B8A8_SRGB, 1, true},
+			{AttachmentType::Color, VK_FORMAT_B8G8R8A8_SRGB, 1, true},
 			{AttachmentType::Depth, FindDepthFormat(), 1, false}
 		};
 
@@ -663,7 +663,14 @@ namespace Low
 
 		for (uint32_t i = 0; i < s_Data.SwapchainRef->Images().size(); i++)
 		{
-			Ref<Framebuffer> framebuffer = CreateRef<Framebuffer>(renderPass->Handle(), width, height, attachmentSpecs);
+			std::vector<VkImage> images;
+			for (auto spec : attachmentSpecs)
+				if (spec.IsSwapchain)
+					images.push_back(swapchain->Images()[i]);
+				else
+					images.push_back(VK_NULL_HANDLE);
+
+			Ref<Framebuffer> framebuffer = CreateRef<Framebuffer>(renderPass->Handle(), width, height, attachmentSpecs, images);
 			s_Data.Framebuffers.push_back(framebuffer);
 		}
 
