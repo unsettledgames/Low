@@ -14,7 +14,7 @@ namespace Low
 		inline VkDeviceMemory Memory() { return m_Memory; }
 		inline VkSampler* Sampler() { return &m_Sampler; }
 		inline VkImageView ImageView() { return m_ImageView; }
-		VkBuffer Buffer();
+		inline Ref<Buffer> Buffer() { return m_Buffer; }
 
 		inline uint32_t GetWidth() { return m_Width; }
 		inline uint32_t GetHeight() { return m_Height; }

@@ -1,5 +1,7 @@
 #include <Resources/Mesh.h>
 
+#include <Vulkan/VulkanCore.h>
+
 #include <Structures/Buffer.h>
 #include <Structures/Vertex.h>
 
@@ -45,6 +47,10 @@ namespace Low
 				indices.push_back(indices.size());
 			}
 		}
+
+		m_VertexBuffer = CreateRef<Buffer>(vertices.size() * sizeof(Vertex), BufferUsage::Vertex);
+		m_IndexBuffer = CreateRef<Buffer>(indices.size() * sizeof(uint32_t), BufferUsage::Index);
+
 		/*
 		m_VertexBuffer = CreateRef<Buffer>(logicalDevice, physicalDevice, sizeof(Vertex) * vertices.size(),
 			VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);

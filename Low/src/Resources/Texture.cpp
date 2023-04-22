@@ -15,8 +15,7 @@ namespace Low
 		VkDeviceSize size = m_Width * m_Height * 4;
 
 		// Read image and store data into buffers
-		m_Buffer = CreateRef<Low::Buffer>(m_Device, physDevice, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-			| VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		m_Buffer = CreateRef<Low::Buffer>(size, BufferUsage::TransferSrc);
 
 		void* data;
 		vkMapMemory(m_Device, m_Buffer->Memory(), 0, size, 0, &data);
@@ -83,6 +82,4 @@ namespace Low
 		vkDestroyImage(m_Device, m_Image, nullptr);
 		vkFreeMemory(m_Device, m_Memory, nullptr);
 	}
-
-	VkBuffer Texture::Buffer() { return m_Buffer->Handle(); }
 }

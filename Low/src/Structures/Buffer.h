@@ -4,22 +4,28 @@
 
 namespace Low
 {
+	enum class BufferUsage {TransferSrc = 0, TransferDst, Vertex, Index, Uniform };
+
 	class Buffer
 	{
 	public:
 		Buffer() = default;
-		Buffer(VkDevice device, VkPhysicalDevice physDevice, uint32_t size, VkBufferUsageFlags usage, VkMemoryPropertyFlags memoryProps);
+		Buffer(uint32_t size, BufferUsage usage);
+		Buffer(uint32_t size, void* data, BufferUsage usage);
 
 		~Buffer();
 		
-		inline VkBuffer& Handle() { return m_Buffer; }
+		inline VkBuffer& Handle() { return m_Handle; }
 		inline VkDeviceMemory& Memory() { return m_Memory; }
 
 		inline size_t Size() { return m_Size; }
+		void SetData(void* data);
 
 	private:
-		VkBuffer m_Buffer;
-		VkDevice m_Device;
+		void Init(uint32_t size, BufferUsage usage);
+
+	private:
+		VkBuffer m_Handle;
 		VkDeviceMemory m_Memory;
 
 		size_t m_Size;
