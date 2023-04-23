@@ -31,6 +31,7 @@
 
 #include <Resources/Texture.h>
 #include <Resources/Shader.h>
+#include <Resources/Mesh.h>
 
 #include <GLFW/glfw3.h>
 #include <stb_image.h>
@@ -40,18 +41,17 @@
 
 namespace Low
 {
-	static  RendererConfig s_Config;
+	static RendererConfig s_Config;
 
 	struct RendererResources
 	{
 		// Buffers
-		Ref<Buffer> VertexBuffer;
-		Ref<Buffer> IndexBuffer;
 		std::vector<Ref<Buffer>> UniformBuffers;
 
 		// Resources
 		Ref<Shader> Shader;
 		Ref<Texture> Texture;
+		Ref<Mesh> Mesh;
 	};
 
 	struct RendererData
@@ -179,7 +179,7 @@ namespace Low
 			scissors.offset.x = 0.0f;
 			scissors.offset.y = 0.0f;
 
-			VkBuffer buffers[] = { s_Data.Resources->VertexBuffer->Handle()};
+			VkBuffer buffers[] = { s_Data.Resources->Mesh->VertexBuffer()->Handle()};
 			VkDeviceSize offsets[] = { 0 };
 
 			vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, s_Data.GraphicsPipeline);
@@ -188,11 +188,11 @@ namespace Low
 			vkCmdSetScissor(commandBuffer, 0, 1, &scissors);
 
 			vkCmdBindVertexBuffers(commandBuffer, 0, 1, buffers, offsets);
-			vkCmdBindIndexBuffer(commandBuffer, s_Data.Resources->IndexBuffer->Handle(), 0, VK_INDEX_TYPE_UINT16);
+			vkCmdBindIndexBuffer(commandBuffer, s_Data.Resources->Mesh->IndexBuffer()->Handle(), 0, VK_INDEX_TYPE_UINT32);
 			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, s_Data.PipelineLayout, 0, 1,
 				&s_Data.DescriptorSets[s_State.CurrentFrame], 0, nullptr);
 
-			vkCmdDrawIndexed(commandBuffer, s_Data.Resources->IndexBuffer->Size() / sizeof(uint16_t), 1, 0, 0, 0);
+			vkCmdDrawIndexed(commandBuffer, s_Data.Resources->Mesh->IndexBuffer()->Size() / sizeof(uint32_t), 1, 0, 0, 0);
 		}
 		vkCmdEndRenderPass(commandBuffer);
 
@@ -273,54 +273,6 @@ namespace Low
 		}
 
 		throw std::runtime_error("Couldn't find suitable memory type");
-	}
-
-
-	static void CreateVertexBuffer()
-	{
-		const std::vector<Vertex> vertices = {
-			{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},
-			{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},
-			{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
-			{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
-
-			{{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},
-			{{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},
-			{{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
-			{{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
-		};
-
-		VkDeviceSize size = sizeof(Vertex) * vertices.size();
-
-		s_Data.Resources->VertexBuffer = CreateRef<Buffer>(size, BufferUsage::Vertex);
-		Buffer stagingBuffer = Buffer(size, BufferUsage::TransferSrc);
-		
-		void* data;
-		if (vkMapMemory(VulkanCore::Device(), stagingBuffer.Memory(), 0, size, 0, &data) != VK_SUCCESS)
-			std::cout << "Mapping failed" << std::endl;
-		memcpy(data, vertices.data(), (size_t)size);
-		vkUnmapMemory(VulkanCore::Device(), stagingBuffer.Memory());
-
-		OneTimeCommands::CopyBuffer(s_Data.Resources->VertexBuffer->Handle(), stagingBuffer.Handle(), size);
-	}
-
-	static void CreateIndexBuffer()
-	{
-		const std::vector<uint16_t> indices = { 
-			0, 1, 2, 2, 3, 0,
-			4, 5, 6, 6, 7, 4
-		};
-		VkDeviceSize size = sizeof(uint16_t) * indices.size();
-
-		s_Data.Resources->IndexBuffer = CreateRef<Buffer>(size, BufferUsage::Index);
-		Buffer stagingBuffer = Buffer(size, BufferUsage::TransferSrc);
-
-		void* data;
-		vkMapMemory(VulkanCore::Device(), stagingBuffer.Memory(), 0, size, 0, &data);
-		memcpy(data, indices.data(), (size_t)size);
-		vkUnmapMemory(VulkanCore::Device(), stagingBuffer.Memory());
-
-		OneTimeCommands::CopyBuffer(s_Data.Resources->IndexBuffer->Handle(), stagingBuffer.Handle(), size);
 	}
 
 	static void CreateUniformBuffers()
@@ -408,7 +360,7 @@ namespace Low
 	
 	static void CreateTextureImage()
 	{
-		s_Data.Resources->Texture = CreateRef<Texture>("../textures/texture.jpg", VulkanCore::Device(), VulkanCore::PhysicalDevice(), VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL);
+		s_Data.Resources->Texture = CreateRef<Texture>("../../Assets/Models/VikingRoom/viking_room.png", VulkanCore::Device(), VulkanCore::PhysicalDevice(), VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL);
 		auto tex = s_Data.Resources->Texture;
 
 		OneTimeCommands::TransitionImageLayout(tex->Handle(), VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
@@ -533,12 +485,12 @@ namespace Low
 		* - Start implementing deferred PBR rendering
 		
 		*/
+
+		Ref<Mesh> mesh = CreateRef<Mesh>("../../Assets/Models/VikingRoom/viking_room.obj");
+		s_Data.Resources->Mesh = mesh;
 		
 		CreateTextureImage();
 		CreateTextureSampler();
-
-		CreateVertexBuffer();
-		CreateIndexBuffer();
 
 		CreateDescriptorSets();
 

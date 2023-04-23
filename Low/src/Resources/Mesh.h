@@ -7,7 +7,10 @@ namespace Low
 	class Mesh
 	{
 	public:
-		Mesh(const std::string& path, VkDevice logicalDevice, VkDevice physicalDevice);
+		Mesh(const std::string& path);
+
+		inline Ref<Buffer> VertexBuffer() { return m_VertexBuffer; }
+		inline Ref<Buffer> IndexBuffer() { return m_IndexBuffer; }
 
 	private:
 		Ref<Buffer> m_VertexBuffer;

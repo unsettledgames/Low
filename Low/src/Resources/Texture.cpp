@@ -11,7 +11,8 @@ namespace Low
 	Texture::Texture(const std::string& path, VkDevice device, VkPhysicalDevice physDevice, VkFormat format, VkImageTiling tiling) : 
 		m_Path(path), m_Device(device), m_Format(format), m_Tiling(tiling)
 	{
-		stbi_uc* pixels = stbi_load("../../Assets/Textures/texture.jpg", &m_Width, &m_Height, &m_ChannelCount, STBI_rgb_alpha);
+		stbi_set_flip_vertically_on_load(true);
+		stbi_uc* pixels = stbi_load(path.c_str(), &m_Width, &m_Height, &m_ChannelCount, STBI_rgb_alpha);
 		VkDeviceSize size = m_Width * m_Height * 4;
 
 		// Read image and store data into buffers

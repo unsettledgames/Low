@@ -10,7 +10,7 @@
 
 namespace Low
 {
-	Mesh::Mesh(const std::string& path, VkDevice logicalDevice, VkDevice physicalDevice)
+	Mesh::Mesh(const std::string& path)
 	{
 		tinyobj::attrib_t attrib;
 		std::vector<tinyobj::shape_t> shapes;
@@ -37,8 +37,8 @@ namespace Low
 				};
 
 				v.TexCoord = {
-					attrib.texcoords[2 * idx.vertex_index + 0],
-					attrib.texcoords[2 * idx.vertex_index + 1],
+					attrib.texcoords[2 * idx.texcoord_index + 0],
+					attrib.texcoords[2 * idx.texcoord_index + 1],
 				};
 
 				v.Color = glm::vec4(1.0f);
@@ -48,19 +48,7 @@ namespace Low
 			}
 		}
 
-		m_VertexBuffer = CreateRef<Buffer>(vertices.size() * sizeof(Vertex), BufferUsage::Vertex);
-		m_IndexBuffer = CreateRef<Buffer>(indices.size() * sizeof(uint32_t), BufferUsage::Index);
-
-		/*
-		m_VertexBuffer = CreateRef<Buffer>(logicalDevice, physicalDevice, sizeof(Vertex) * vertices.size(),
-			VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		m_IndexBuffer = CreateRef<Buffer>(logicalDevice, physicalDevice, sizeof(uint32_t) * indices.size(),
-			VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-		Ref<Buffer> vertexStagingBuffer = CreateRef<Buffer>(logicalDevice, physicalDevice, sizeof(Vertex) * vertices.size(),
-			VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-		Ref<Buffer> indexStagingBuffer = CreateRef<Buffer>(logicalDevice, physicalDevice, sizeof(uint32_t) * indices.size(),
-			VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-			*/
+		m_VertexBuffer = CreateRef<Buffer>(vertices.size() * sizeof(Vertex), vertices.data(), BufferUsage::Vertex);
+		m_IndexBuffer = CreateRef<Buffer>(indices.size() * sizeof(uint32_t), indices.data(), BufferUsage::Index);
 	}
 }
