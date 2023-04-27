@@ -24,6 +24,8 @@ namespace Low
 			throw std::runtime_error(warn + err);
 		}
 
+		std::unordered_map<Vertex, uint32_t> uniqueVertices;
+
 		for (const auto& shape : shapes)
 		{
 			for (const auto& idx : shape.mesh.indices)
@@ -41,10 +43,20 @@ namespace Low
 					attrib.texcoords[2 * idx.texcoord_index + 1],
 				};
 
+				v.Normal = {
+					attrib.normals[3 * idx.normal_index + 0],
+					attrib.normals[3 * idx.normal_index + 1],
+					attrib.normals[3 * idx.normal_index + 2]
+				};
+
 				v.Color = glm::vec4(1.0f);
 
-				vertices.push_back(v);
-				indices.push_back(indices.size());
+				if (uniqueVertices.count(v) == 0) {
+					uniqueVertices[v] = vertices.size();
+					vertices.push_back(v);
+				}
+
+				indices.push_back(uniqueVertices[v]);
 			}
 		}
 

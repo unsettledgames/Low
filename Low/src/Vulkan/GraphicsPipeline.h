@@ -6,6 +6,14 @@ namespace Low
 	class DescriptorSetLayout;
 	class RenderPass;
 
+	struct PushConsts
+	{
+		glm::vec3 CameraPos;
+		float Metallic;
+		float Roughness;
+		float AO;
+	};
+
 	class GraphicsPipeline
 	{
 	public:

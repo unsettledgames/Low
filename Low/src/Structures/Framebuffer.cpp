@@ -5,7 +5,7 @@
 namespace Low
 {
 	Framebuffer::Framebuffer(VkRenderPass renderPass, uint32_t width, uint32_t height, std::vector<FramebufferAttachmentSpecs>& specs,
-		std::vector<VkImage> images)
+		std::vector<VkImage> images) : m_Width(width), m_Height(height)
 	{
 		uint32_t attachmentIdx = 0;
 

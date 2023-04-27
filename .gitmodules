@@ -4,9 +4,6 @@
 [submodule "Low/vendor/glm"]
 	path = Low/vendor/glm
 	url = https://github.com/g-truc/glm
-[submodule "Lower/vendor/imgui"]
-	path = Lower/vendor/imgui
-	url = https://github.com/unsettledgames/imgui
 [submodule "Lower/vendor/imguizmo"]
 	path = Lower/vendor/imguizmo
 	url = https://github.com/unsettledgames/ImGuizmo

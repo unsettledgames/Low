@@ -50,7 +50,8 @@ namespace Low
 
 		// Resources
 		Ref<Shader> Shader;
-		Ref<Texture> Texture;
+		Ref<Low::Texture> Texture;
+		Ref<Low::Texture> Roughness;
 		Ref<Mesh> Mesh;
 	};
 
@@ -192,6 +193,14 @@ namespace Low
 			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, s_Data.PipelineLayout, 0, 1,
 				&s_Data.DescriptorSets[s_State.CurrentFrame], 0, nullptr);
 
+			PushConsts consts;
+
+			consts.AO = 0.01f;
+			consts.Metallic = 0.5f;
+			consts.Roughness = 1.0f;
+			consts.CameraPos = glm::vec3(0.0f, 2, 2);
+
+			vkCmdPushConstants(commandBuffer, s_Data.PipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConsts), &consts);
 			vkCmdDrawIndexed(commandBuffer, s_Data.Resources->Mesh->IndexBuffer()->Size() / sizeof(uint32_t), 1, 0, 0, 0);
 		}
 		vkCmdEndRenderPass(commandBuffer);
@@ -310,12 +319,17 @@ namespace Low
 			bufferInfo.offset = 0;
 			bufferInfo.range = sizeof(UniformBufferObject);
 
+			VkDescriptorImageInfo roughness = {};
+			roughness.sampler = *s_Data.Resources->Roughness->Sampler();
+			roughness.imageView = s_Data.Resources->Roughness->ImageView();
+			roughness.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
 			VkDescriptorImageInfo samplerInfo = {};
 			samplerInfo.sampler = *s_Data.Resources->Texture->Sampler();
 			samplerInfo.imageView = s_Data.Resources->Texture->ImageView();
 			samplerInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-			std::array<VkWriteDescriptorSet, 2> descriptorWrites({});
+			std::array<VkWriteDescriptorSet, 3> descriptorWrites({});
 
 			descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			descriptorWrites[0].dstSet = s_Data.DescriptorSets[i];
@@ -334,6 +348,14 @@ namespace Low
 			descriptorWrites[1].descriptorCount = 1;
 			descriptorWrites[1].pImageInfo = &samplerInfo;
 
+			descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptorWrites[2].dstSet = s_Data.DescriptorSets[i];
+			descriptorWrites[2].dstBinding = 2;
+			descriptorWrites[2].dstArrayElement = 0;
+			descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			descriptorWrites[2].descriptorCount = 1;
+			descriptorWrites[2].pImageInfo = &roughness;
+
 			vkUpdateDescriptorSets(VulkanCore::Device(), descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);
 		}
 	}
@@ -350,52 +372,19 @@ namespace Low
 		float ratio = (float)w / h;
 
 		UniformBufferObject ubo = {};
-		ubo.Model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-		ubo.View = glm::lookAt(glm::vec3(0.0f, 2, 2), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+		ubo.Model = glm::rotate(glm::mat4(1.0f), time * 0.75f * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+		ubo.View = glm::lookAt(glm::vec3(0.0f, 0.0f, 4), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 		ubo.Projection = glm::perspective(glm::radians(45.0f), (float)s_Data.SwapchainExtent.width / s_Data.SwapchainExtent.height, 0.1f, 10.0f);
 		ubo.Projection[1][1] *= -1;
 
 		memcpy(s_Data.UniformBuffersMapped[currentImage], &ubo, sizeof(UniformBufferObject));
 	}
 	
-	static void CreateTextureImage()
+	static void CreateTextures()
 	{
-		s_Data.Resources->Texture = CreateRef<Texture>("../../Assets/Models/VikingRoom/viking_room.png", VulkanCore::Device(), VulkanCore::PhysicalDevice(), VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL);
-		auto tex = s_Data.Resources->Texture;
-
-		OneTimeCommands::TransitionImageLayout(tex->Handle(), VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-		OneTimeCommands::CopyBufferToImage(tex->Handle(), tex->Buffer()->Handle(), tex->GetWidth(), tex->GetHeight());
-		OneTimeCommands::TransitionImageLayout(tex->Handle(), VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-	}
-
-	static void CreateTextureSampler()
-	{
-		VkSamplerCreateInfo samplerInfo = {};
-		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-		samplerInfo.magFilter = VK_FILTER_LINEAR;
-		samplerInfo.minFilter = VK_FILTER_LINEAR;
-		samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerInfo.anisotropyEnable = true;
-
-		VkPhysicalDeviceProperties properties{};
-		vkGetPhysicalDeviceProperties(VulkanCore::PhysicalDevice(), &properties);
-
-		samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
-		samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-		samplerInfo.unnormalizedCoordinates = VK_FALSE;
-		samplerInfo.compareEnable = VK_FALSE;
-		samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-		
-		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-		samplerInfo.mipLodBias = 0.0f;
-		samplerInfo.minLod = 0.0f;
-		samplerInfo.maxLod = 0.0f;
-
-		if (vkCreateSampler(VulkanCore::Device(), &samplerInfo, nullptr, s_Data.Resources->Texture->Sampler()) != VK_SUCCESS)
-			throw std::runtime_error("Couldn't create sampler");
-
+		s_Data.Resources->Texture = CreateRef<Texture>("../../Assets/Models/Sphere/Rusty/rustediron2_basecolor.png", VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL);
+		s_Data.Resources->Roughness = CreateRef<Texture>("../../Assets/Models/Sphere/Rusty/rustediron2_metallic.png", VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL);
+	
 	}
 
 	void Renderer::Init(RendererConfig config, GLFWwindow* windowHandle)
@@ -466,12 +455,12 @@ namespace Low
 
 		Ref<Shader> shader = CreateRef<Shader>("basic", VulkanCore::Device());
 		s_Data.Resources->Shader = shader;
+
 		Ref<GraphicsPipeline> graphicsPipeline = CreateRef<GraphicsPipeline>(shader, descriptorSetLayout, renderPass, glm::vec2(s_Data.SwapchainExtent.width, s_Data.SwapchainExtent.height));
 		s_Data.GraphicsPipeline = graphicsPipeline->Handle();
 		s_Data.PipelineLayout = graphicsPipeline->Layout();
 
 		/* TODO:
-		* - Easier way to handle format transfers 
 		* - Easier way to create images
 		* - Expose uniform memory
 		* 
@@ -483,15 +472,21 @@ namespace Low
 		* - Implement basic API
 		* 
 		* - Start implementing deferred PBR rendering
+		*	- Have a look at what PBR rendering needs. Each parameter is probably a framebuffer in the GBuffer
+		*	- Store stuff in the G-Buffer:
+		*		- Positions
+		*		- Normals
+		*		- Color
+		*	- Do a depth only pass
+		*	- Fill the G-buffer: the vertex shader returns the necessary data to the fragment shader, which just outputs to the right attachments
+		*	- Draw the fullscreen quad: for each fragment, sample the previously filled attachments and do the necessary computations
 		
 		*/
 
-		Ref<Mesh> mesh = CreateRef<Mesh>("../../Assets/Models/VikingRoom/viking_room.obj");
+		Ref<Mesh> mesh = CreateRef<Mesh>("../../Assets/Models/Sphere/sphere.obj");
 		s_Data.Resources->Mesh = mesh;
 		
-		CreateTextureImage();
-		CreateTextureSampler();
-
+		CreateTextures();
 		CreateDescriptorSets();
 
 		CreateSynchronizationObjects();

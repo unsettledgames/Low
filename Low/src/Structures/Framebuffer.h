@@ -122,8 +122,8 @@ namespace Low
 		}
 
 	private:
-		VkFramebuffer m_Handle;
-		VkImageView m_ImageView;
+		VkFramebuffer m_Handle = VK_NULL_HANDLE;
+		VkImageView m_ImageView = VK_NULL_HANDLE;
 
 		uint32_t m_Width;
 		uint32_t m_Height;

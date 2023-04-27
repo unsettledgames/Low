@@ -2,14 +2,17 @@
 #include <Structures/Buffer.h>
 #include <Hardware/Memory.h>
 
+#include <Vulkan/VulkanCore.h>
+#include <Vulkan/Command/OneTimeCommands.h>
+
 #include <stb_image.h>
 
 #include <stdexcept>
 
 namespace Low
 {
-	Texture::Texture(const std::string& path, VkDevice device, VkPhysicalDevice physDevice, VkFormat format, VkImageTiling tiling) : 
-		m_Path(path), m_Device(device), m_Format(format), m_Tiling(tiling)
+	Texture::Texture(const std::string& path, VkFormat format, VkImageTiling tiling) : 
+		m_Path(path), m_Format(format), m_Tiling(tiling)
 	{
 		stbi_set_flip_vertically_on_load(true);
 		stbi_uc* pixels = stbi_load(path.c_str(), &m_Width, &m_Height, &m_ChannelCount, STBI_rgb_alpha);
@@ -19,9 +22,9 @@ namespace Low
 		m_Buffer = CreateRef<Low::Buffer>(size, BufferUsage::TransferSrc);
 
 		void* data;
-		vkMapMemory(m_Device, m_Buffer->Memory(), 0, size, 0, &data);
+		vkMapMemory(VulkanCore::Device(), m_Buffer->Memory(), 0, size, 0, &data);
 		memcpy(data, pixels, size);
-		vkUnmapMemory(m_Device, m_Buffer->Memory());
+		vkUnmapMemory(VulkanCore::Device(), m_Buffer->Memory());
 
 		stbi_image_free(pixels);
 
@@ -45,21 +48,21 @@ namespace Low
 		texInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 		texInfo.flags = 0;
 
-		if (vkCreateImage(m_Device, &texInfo, nullptr, &m_Image) != VK_SUCCESS)
+		if (vkCreateImage(VulkanCore::Device(), &texInfo, nullptr, &m_Image) != VK_SUCCESS)
 			throw std::runtime_error("Couldn't create texture image");
 
 		VkMemoryRequirements memoryReqs;
-		vkGetImageMemoryRequirements(m_Device, m_Image, &memoryReqs);
+		vkGetImageMemoryRequirements(VulkanCore::Device(), m_Image, &memoryReqs);
 
 		VkMemoryAllocateInfo allocInfo = {};
 		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 		allocInfo.allocationSize = memoryReqs.size;
-		allocInfo.memoryTypeIndex = Memory::FindMemoryType(physDevice, memoryReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		allocInfo.memoryTypeIndex = Memory::FindMemoryType(VulkanCore::PhysicalDevice(), memoryReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-		if (vkAllocateMemory(m_Device, &allocInfo, nullptr, &m_Memory) != VK_SUCCESS)
+		if (vkAllocateMemory(VulkanCore::Device(), &allocInfo, nullptr, &m_Memory) != VK_SUCCESS)
 			throw std::runtime_error("Couldn't allocate texture memory");
 
-		vkBindImageMemory(m_Device, m_Image, m_Memory, 0);
+		vkBindImageMemory(VulkanCore::Device(), m_Image, m_Memory, 0);
 
 		VkImageViewCreateInfo viewInfo{};
 		viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -72,15 +75,45 @@ namespace Low
 		viewInfo.subresourceRange.baseArrayLayer = 0;
 		viewInfo.subresourceRange.layerCount = 1;
 
-		if (vkCreateImageView(m_Device, &viewInfo, nullptr, &m_ImageView) != VK_SUCCESS)
+		if (vkCreateImageView(VulkanCore::Device(), &viewInfo, nullptr, &m_ImageView) != VK_SUCCESS)
 			throw std::runtime_error("Couldn't create image view");
+
+		VkSamplerCreateInfo samplerInfo = {};
+		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+		samplerInfo.magFilter = VK_FILTER_LINEAR;
+		samplerInfo.minFilter = VK_FILTER_LINEAR;
+		samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.anisotropyEnable = true;
+
+		VkPhysicalDeviceProperties properties{};
+		vkGetPhysicalDeviceProperties(VulkanCore::PhysicalDevice(), &properties);
+
+		samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+		samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+		samplerInfo.unnormalizedCoordinates = VK_FALSE;
+		samplerInfo.compareEnable = VK_FALSE;
+		samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+
+		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+		samplerInfo.mipLodBias = 0.0f;
+		samplerInfo.minLod = 0.0f;
+		samplerInfo.maxLod = 0.0f;
+
+		if (vkCreateSampler(VulkanCore::Device(), &samplerInfo, nullptr, &m_Sampler) != VK_SUCCESS)
+			throw std::runtime_error("Couldn't create sampler");
+
+		OneTimeCommands::TransitionImageLayout(m_Image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		OneTimeCommands::CopyBufferToImage(m_Image, m_Buffer->Handle(), m_Width, m_Height);
+		OneTimeCommands::TransitionImageLayout(m_Image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	}
 
 	Texture::~Texture()
 	{
-		vkDestroyImageView(m_Device, m_ImageView, nullptr);
-		vkDestroySampler(m_Device, m_Sampler, nullptr);
-		vkDestroyImage(m_Device, m_Image, nullptr);
-		vkFreeMemory(m_Device, m_Memory, nullptr);
+		vkDestroyImageView(VulkanCore::Device(), m_ImageView, nullptr);
+		vkDestroySampler(VulkanCore::Device(), m_Sampler, nullptr);
+		vkDestroyImage(VulkanCore::Device(), m_Image, nullptr);
+		vkFreeMemory(VulkanCore::Device(), m_Memory, nullptr);
 	}
 }

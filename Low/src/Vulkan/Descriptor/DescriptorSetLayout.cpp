@@ -19,7 +19,14 @@ namespace Low
 		samplerBinding.pImmutableSamplers = nullptr;
 		samplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-		std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboBinding, samplerBinding };
+		VkDescriptorSetLayoutBinding sampler2 = {};
+		sampler2.binding = 2;
+		sampler2.descriptorCount = 1;
+		sampler2.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		sampler2.pImmutableSamplers = nullptr;
+		sampler2.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+		std::array<VkDescriptorSetLayoutBinding, 3> bindings = { uboBinding, samplerBinding, sampler2};
 
 		VkDescriptorSetLayoutCreateInfo layoutInfo = {};
 		VkPipelineLayout pipelineLayout = {};

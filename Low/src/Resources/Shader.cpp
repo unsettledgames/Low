@@ -66,11 +66,17 @@ namespace Low
 		
 		shaderc::SpvCompilationResult vertModule = compiler.CompileGlslToSpv(vertSrc, shaderc_shader_kind::shaderc_glsl_vertex_shader, (m_Name + ".vert").c_str(), options);
 		if (vertModule.GetCompilationStatus() != shaderc_compilation_status_success)
+		{
 			std::cerr << "Shader " << m_Name << " failed to compile: " << vertModule.GetErrorMessage() << std::endl;
+			throw std::runtime_error("Vertex shader failed to compile");
+		}
 
 		shaderc::SpvCompilationResult fragModule = compiler.CompileGlslToSpv(fragSrc, shaderc_shader_kind::shaderc_fragment_shader, (m_Name + ".frag").c_str(), options);
 		if (fragModule.GetCompilationStatus() != shaderc_compilation_status_success)
-			std::cerr << "Shader " << m_Name << " failed to compile: " << vertModule.GetErrorMessage() << std::endl;
+		{
+			std::cerr << "Shader " << m_Name << " failed to compile: " << fragModule.GetErrorMessage() << std::endl;
+			throw std::runtime_error("Fragment shader failed to compile");
+		}
 
 		vertBin = { vertModule.cbegin(), vertModule.cend() };
 		fragBin = { fragModule.cbegin(), fragModule.cend() };
@@ -92,6 +98,5 @@ namespace Low
 			std::cout << "Failed creating vertex shader" << std::endl;
 		if (vkCreateShaderModule(m_Device, &fragShaderInfo, nullptr, &m_FragModule) != VK_SUCCESS)
 			std::cout << "Failed creating fragment shader" << std::endl;
-
 	}
 }

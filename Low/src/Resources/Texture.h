@@ -7,7 +7,7 @@ namespace Low
 	class Texture
 	{
 	public:
-		Texture(const std::string& path, VkDevice device, VkPhysicalDevice physDevice, VkFormat format, VkImageTiling tiling);
+		Texture(const std::string& path, VkFormat format, VkImageTiling tiling);
 		~Texture();
 
 		inline VkImage Handle() { return m_Image; }
@@ -26,7 +26,6 @@ namespace Low
 		int m_Height;
 		int m_ChannelCount;
 
-		VkDevice m_Device;
 		VkImage m_Image;
 		VkImageView m_ImageView;
 		VkSampler m_Sampler;
