@@ -1,4 +1,5 @@
 #include <Resources/Shader.h>
+#include <Vulkan/VulkanCore.h>
 
 #include <iostream>
 #include <sstream>
@@ -11,7 +12,7 @@
 
 namespace Low
 {
-	Shader::Shader(const std::string& shaderName, VkDevice device) : m_Name(shaderName), m_Device(device)
+	Shader::Shader(const std::string& shaderName) : m_Name(shaderName)
 	{
 		std::string vertPath = "../../Assets/Shaders/" + shaderName + ".vert";
 		std::string fragPath = "../../Assets/Shaders/" + shaderName + ".frag";
@@ -45,8 +46,8 @@ namespace Low
 
 	Shader::~Shader()
 	{
-		vkDestroyShaderModule(m_Device, m_FragModule, nullptr);
-		vkDestroyShaderModule(m_Device, m_VertModule, nullptr);
+		vkDestroyShaderModule(VulkanCore::Device(), m_FragModule, nullptr);
+		vkDestroyShaderModule(VulkanCore::Device(), m_VertModule, nullptr);
 	}
 
 	void Shader::Compile(const std::string& vertSrc, const std::string& fragSrc, std::vector<uint32_t>& vertBin, std::vector<uint32_t>& fragBin)
@@ -94,9 +95,9 @@ namespace Low
 		fragShaderInfo.codeSize = fragSpirv.size() * sizeof(uint32_t);
 		fragShaderInfo.pCode = fragSpirv.data();
 
-		if (vkCreateShaderModule(m_Device, &vertShaderInfo, nullptr, &m_VertModule) != VK_SUCCESS)
+		if (vkCreateShaderModule(VulkanCore::Device(), &vertShaderInfo, nullptr, &m_VertModule) != VK_SUCCESS)
 			std::cout << "Failed creating vertex shader" << std::endl;
-		if (vkCreateShaderModule(m_Device, &fragShaderInfo, nullptr, &m_FragModule) != VK_SUCCESS)
+		if (vkCreateShaderModule(VulkanCore::Device(), &fragShaderInfo, nullptr, &m_FragModule) != VK_SUCCESS)
 			std::cout << "Failed creating fragment shader" << std::endl;
 	}
 }

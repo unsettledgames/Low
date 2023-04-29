@@ -7,3 +7,7 @@
 [submodule "Lower/vendor/imguizmo"]
 	path = Lower/vendor/imguizmo
 	url = https://github.com/unsettledgames/ImGuizmo
+[submodule "Lower/vendor/imgui"]
+	path = Lower/vendor/imgui
+	url = https://github.com/unsettledgames/imgui
+	branch = docking

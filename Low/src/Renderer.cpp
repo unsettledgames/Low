@@ -72,7 +72,7 @@ namespace Low
 
 		// Pipeline
 		VkPipelineLayout PipelineLayout;
-		VkRenderPass RenderPass;
+		Ref<RenderPass> RenderPass;
 		VkPipeline GraphicsPipeline;
 
 		// Commands
@@ -96,6 +96,7 @@ namespace Low
 	struct RendererState
 	{
 		uint32_t CurrentFrame = 0;
+		uint32_t CurrentImage = 0;
 		bool FramebufferResized = false;
 	} s_State;
 
@@ -140,7 +141,7 @@ namespace Low
 		);
 	}
 
-	static void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+	static void RecordCommandBuffer(VkCommandBuffer commandBuffer)
 	{
 		VkCommandBufferBeginInfo beginInfo{};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -151,20 +152,7 @@ namespace Low
 			throw std::runtime_error("failed to begin recording command buffer!");
 		}
 
-		VkRenderPassBeginInfo renderPassInfo{};
-		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		renderPassInfo.renderPass = s_Data.RenderPass;
-		renderPassInfo.framebuffer = s_Data.Framebuffers[imageIndex]->Handle();
-		renderPassInfo.renderArea.offset = { 0,0 };
-		renderPassInfo.renderArea.extent = s_Data.SwapchainExtent;
-
-		std::array<VkClearValue, 2> clearColors;
-		clearColors[0].color = {0.0f, 0.0f, 0.0f, 1.0f};
-		clearColors[1].depthStencil = { 1.0f, 0 };
-		renderPassInfo.clearValueCount = clearColors.size();
-		renderPassInfo.pClearValues = clearColors.data();
-
-		vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+		Renderer::BeginRenderPass(commandBuffer);
 		{
 			VkViewport viewport = {};
 			VkRect2D scissors = {};
@@ -203,7 +191,7 @@ namespace Low
 			vkCmdPushConstants(commandBuffer, s_Data.PipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConsts), &consts);
 			vkCmdDrawIndexed(commandBuffer, s_Data.Resources->Mesh->IndexBuffer()->Size() / sizeof(uint32_t), 1, 0, 0, 0);
 		}
-		vkCmdEndRenderPass(commandBuffer);
+		Renderer::EndRenderPass(commandBuffer);
 
 		if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS)
 			throw std::runtime_error("Error ending the command buffer");
@@ -387,6 +375,29 @@ namespace Low
 	
 	}
 
+	void Renderer::BeginRenderPass(VkCommandBuffer cmdBuffer)
+	{
+		std::array<VkClearValue, 2> clearColors;
+		clearColors[0].color = { 0.0f, 0.0f, 0.0f, 1.0f };
+		clearColors[1].depthStencil = { 1.0f, 0 };
+
+		VkRenderPassBeginInfo renderPassInfo{};
+		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		renderPassInfo.renderPass = s_Data.RenderPass->Handle();
+		renderPassInfo.framebuffer = s_Data.Framebuffers[s_State.CurrentImage]->Handle();
+		renderPassInfo.renderArea.offset = { 0,0 };
+		renderPassInfo.renderArea.extent = s_Data.SwapchainExtent;
+		renderPassInfo.clearValueCount = clearColors.size();
+		renderPassInfo.pClearValues = clearColors.data();
+
+		vkCmdBeginRenderPass(cmdBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+	}
+
+	void Renderer::EndRenderPass(VkCommandBuffer cmdBuffer)
+	{
+		vkCmdEndRenderPass(cmdBuffer);
+	}
+
 	void Renderer::Init(RendererConfig config, GLFWwindow* windowHandle)
 	{
 		int width, height;
@@ -437,8 +448,7 @@ namespace Low
 			{AttachmentType::Depth, FindDepthFormat(), 1, false}
 		};
 
-		Ref<RenderPass> renderPass = CreateRef<RenderPass>(attachmentSpecs);
-		s_Data.RenderPass = renderPass->Handle();
+		s_Data.RenderPass = CreateRef<RenderPass>(attachmentSpecs);
 
 		for (uint32_t i = 0; i < s_Data.SwapchainRef->Images().size(); i++)
 		{
@@ -449,14 +459,14 @@ namespace Low
 				else
 					images.push_back(VK_NULL_HANDLE);
 
-			Ref<Framebuffer> framebuffer = CreateRef<Framebuffer>(renderPass->Handle(), width, height, attachmentSpecs, images);
+			Ref<Framebuffer> framebuffer = CreateRef<Framebuffer>(s_Data.RenderPass->Handle(), width, height, attachmentSpecs, images);
 			s_Data.Framebuffers.push_back(framebuffer);
 		}
 
-		Ref<Shader> shader = CreateRef<Shader>("basic", VulkanCore::Device());
+		Ref<Shader> shader = CreateRef<Shader>("basic");
 		s_Data.Resources->Shader = shader;
 
-		Ref<GraphicsPipeline> graphicsPipeline = CreateRef<GraphicsPipeline>(shader, descriptorSetLayout, renderPass, glm::vec2(s_Data.SwapchainExtent.width, s_Data.SwapchainExtent.height));
+		Ref<GraphicsPipeline> graphicsPipeline = CreateRef<GraphicsPipeline>(shader, descriptorSetLayout, s_Data.RenderPass, glm::vec2(s_Data.SwapchainExtent.width, s_Data.SwapchainExtent.height));
 		s_Data.GraphicsPipeline = graphicsPipeline->Handle();
 		s_Data.PipelineLayout = graphicsPipeline->Layout();
 
@@ -513,13 +523,12 @@ namespace Low
 		*/
 
 		VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-		uint32_t imageIdx;
 
 		UpdateUniformBuffer(s_State.CurrentFrame);
 		vkWaitForFences(VulkanCore::Device(), 1, &s_Synch[s_State.CurrentFrame].FenInFlight, VK_TRUE, UINT64_MAX);
 
 		VkResult res = vkAcquireNextImageKHR(VulkanCore::Device(), s_Data.Swapchain, UINT64_MAX, 
-			s_Synch[s_State.CurrentFrame].SemImageAvailable, VK_NULL_HANDLE, &imageIdx);
+			s_Synch[s_State.CurrentFrame].SemImageAvailable, VK_NULL_HANDLE, &s_State.CurrentImage);
 		if (res == VK_ERROR_OUT_OF_DATE_KHR)
 		{
 			RecreateSwapchain();
@@ -529,7 +538,12 @@ namespace Low
 		vkResetFences(VulkanCore::Device(), 1, &s_Synch[s_State.CurrentFrame].FenInFlight);
 		vkResetCommandBuffer(s_Data.CommandBuffers[s_State.CurrentFrame], 0);
 		
-		RecordCommandBuffer(s_Data.CommandBuffers[s_State.CurrentFrame], imageIdx);
+		bool inited = false;
+		if (!inited)
+		{
+			RecordCommandBuffer(s_Data.CommandBuffers[s_State.CurrentFrame]);
+			inited = true;
+		}
 
 		VkSubmitInfo submitInfo = {};
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -552,7 +566,7 @@ namespace Low
 		VkSwapchainKHR swapChains = { s_Data.Swapchain };
 		presentInfo.swapchainCount = 1;
 		presentInfo.pSwapchains = &swapChains;
-		presentInfo.pImageIndices = &imageIdx;
+		presentInfo.pImageIndices = &s_State.CurrentImage;
 		presentInfo.pResults = nullptr;
 
 		res = vkQueuePresentKHR(s_Data.PresentationQueue, &presentInfo);
@@ -575,7 +589,7 @@ namespace Low
 
 		vkDestroyPipelineLayout(VulkanCore::Device(), s_Data.PipelineLayout, nullptr);
 		vkDestroyPipeline(VulkanCore::Device(), s_Data.GraphicsPipeline, nullptr);
-		vkDestroyRenderPass(VulkanCore::Device(), s_Data.RenderPass, nullptr);
+		vkDestroyRenderPass(VulkanCore::Device(), s_Data.RenderPass->Handle(), nullptr);
 
 		vkDestroyCommandPool(VulkanCore::Device(), s_Data.CommandPool, nullptr);
 

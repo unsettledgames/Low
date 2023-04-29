@@ -19,6 +19,7 @@ add_subdirectory(vendor/imguizmo)
 
 target_link_libraries(Lower
 	PUBLIC Low
+	PUBLIC imgui
 )
 
 target_include_directories(Lower

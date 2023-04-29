@@ -72,7 +72,7 @@ void main()
 	lightColors[0] = vec3(23.47, 21.31, 20.79);
 
     vec3 F0 = vec3(0.04); 
-	vec3 albedo = vec3(1.0);//texture(u_Texture, v_TexCoord).xyz;
+	vec3 albedo = texture(u_Texture, v_TexCoord).xyz;
     F0 = mix(F0, albedo, u_PushConsts.Metallic);
 	
     // reflectance equation

@@ -14,7 +14,6 @@ namespace Low
 
 		static void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
 
-	private:
 		static VkCommandBuffer Begin();
 		static void End(VkCommandBuffer cmd);
 	};
