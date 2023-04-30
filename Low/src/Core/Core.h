@@ -16,4 +16,16 @@ namespace Low
 	{
 		return std::unique_ptr<T>(std::forward<Args>(args)...);
 	}
+
+	template <typename T>
+	constexpr Ref<T> WrapRef(T* p)
+	{
+		return std::shared_ptr<T>(p);
+	}
+
+	template <typename T>
+	constexpr Ref<T> WrapScope(T* p)
+	{
+		return std::unique_ptr<T>(p);
+	}
 }

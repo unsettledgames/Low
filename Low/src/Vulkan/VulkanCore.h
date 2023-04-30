@@ -16,13 +16,13 @@ namespace Low
 	class VulkanCore
 	{
 	public:
-		static VkInstance Instance();
-		static VkDevice Device();
-		static VkPhysicalDevice PhysicalDevice();
-		static VkSurfaceKHR Surface();
-
-		static Ref<Queue> GraphicsQueue();
-		static Ref<Queue> PresentQueue();
+		static inline VkInstance Instance() { return s_Instance; }
+		static inline VkDevice Device() { return s_Device; }
+		static inline VkPhysicalDevice PhysicalDevice() { return s_PhysicalDevice; }
+		static inline VkSurfaceKHR Surface() { return s_WindowSurface; }
+		
+		static inline Ref<Queue> GraphicsQueue() { return s_GraphicsQueue; }
+		static inline Ref<Queue> PresentQueue() { return s_PresentQueue; }
 
 		static void Init(const VulkanCoreConfig& config);
 
@@ -30,5 +30,16 @@ namespace Low
 		static void CreateInstance();
 		static void PickPhysicalDevice();
 		static void CreateLogicalDevice();
+
+	private:
+		static VkInstance s_Instance;
+		static VkDevice s_Device;
+		static VkPhysicalDevice s_PhysicalDevice;
+		static VkSurfaceKHR s_WindowSurface;
+
+		static Ref<Queue> s_GraphicsQueue;
+		static Ref<Queue> s_PresentQueue;
+
+		static VulkanCoreConfig s_Config;
 	};
 }

@@ -12,6 +12,7 @@ namespace Low
 		Queue(VkQueue handle, QueueType type) : m_Handle(handle), m_Type(type) {}
 
 		void Submit(Ref<CommandBuffer> buf);
+		void Present(Ref<CommandBuffer> buf);
 
 		inline operator VkQueue() { return m_Handle; }
 

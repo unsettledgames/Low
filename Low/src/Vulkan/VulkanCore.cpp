@@ -7,29 +7,26 @@
 
 namespace Low
 {
-	struct VulkanCoreData
-	{
-		VkInstance Instance = VK_NULL_HANDLE;
-		VkDevice Device = VK_NULL_HANDLE;
-		VkPhysicalDevice PhysicalDevice = VK_NULL_HANDLE;
-		VkSurfaceKHR WindowSurface = VK_NULL_HANDLE;
-		
-		Ref<Queue> GraphicsQueue = VK_NULL_HANDLE;
-		Ref<Queue> PresentQueue = VK_NULL_HANDLE;
+	VkInstance			VulkanCore::s_Instance = VK_NULL_HANDLE;
+	VkDevice			VulkanCore::s_Device = VK_NULL_HANDLE;
+	VkPhysicalDevice	VulkanCore::s_PhysicalDevice = VK_NULL_HANDLE;
+	VkSurfaceKHR		VulkanCore::s_WindowSurface = VK_NULL_HANDLE;
 
-		VulkanCoreConfig Config = {};
-	} s_VulkanCoreData;
+	Ref<Queue>			VulkanCore::s_GraphicsQueue = VK_NULL_HANDLE;
+	Ref<Queue>			VulkanCore::s_PresentQueue = VK_NULL_HANDLE;
+
+	VulkanCoreConfig	VulkanCore::s_Config = {};
 
 	void VulkanCore::Init(const VulkanCoreConfig& config)
 	{
-		s_VulkanCoreData.Config = config;
+		s_Config = config;
 
 		Debug::InitValidationLayers();
 		CreateInstance();
-		Debug::InitMessengers(s_VulkanCoreData.Instance);
+		Debug::InitMessengers(s_Instance);
 
-		if (glfwCreateWindowSurface(s_VulkanCoreData.Instance, s_VulkanCoreData.Config.WindowHandle, nullptr, 
-			&s_VulkanCoreData.WindowSurface) != VK_SUCCESS)
+		if (glfwCreateWindowSurface(s_Instance, s_Config.WindowHandle, nullptr, 
+			&s_WindowSurface) != VK_SUCCESS)
 			throw std::runtime_error("failed to create window surface!");
 
 		PickPhysicalDevice();
@@ -59,8 +56,8 @@ namespace Low
 		createInfo.pApplicationInfo = &appInfo;
 		createInfo.pNext = &debugInfo;
 
-		createInfo.enabledExtensionCount = s_VulkanCoreData.Config.UserExtensions.size();
-		createInfo.ppEnabledExtensionNames = s_VulkanCoreData.Config.UserExtensions.data();
+		createInfo.enabledExtensionCount = s_Config.UserExtensions.size();
+		createInfo.ppEnabledExtensionNames = s_Config.UserExtensions.data();
 
 #ifndef LOW_VALIDATION_LAYERS
 		createInfo.enabledLayerCount = 0;
@@ -71,7 +68,7 @@ namespace Low
 
 #endif
 
-		VkResult ret = vkCreateInstance(&createInfo, nullptr, &s_VulkanCoreData.Instance);
+		VkResult ret = vkCreateInstance(&createInfo, nullptr, &s_Instance);
 		if (ret != VK_SUCCESS)
 			std::cout << "Instance creation failure: " << ret << std::endl;
 	}
@@ -106,8 +103,8 @@ namespace Low
 		createInfo.queueCreateInfoCount = queueCreateInfo.size();
 		createInfo.pEnabledFeatures = &deviceFeatures;
 
-		createInfo.enabledExtensionCount = s_VulkanCoreData.Config.LowExtensions.size();
-		createInfo.ppEnabledExtensionNames = s_VulkanCoreData.Config.LowExtensions.data();
+		createInfo.enabledExtensionCount = s_Config.LowExtensions.size();
+		createInfo.ppEnabledExtensionNames = s_Config.LowExtensions.data();
 
 #ifdef LOW_VALIDATION_LAYERS
 		auto layers = Debug::GetValidationLayers();
@@ -117,7 +114,7 @@ namespace Low
 		createInfo.enabledLayerCount = 0;
 #endif
 
-		auto err = vkCreateDevice(PhysicalDevice(), &createInfo, nullptr, &s_VulkanCoreData.Device);
+		auto err = vkCreateDevice(PhysicalDevice(), &createInfo, nullptr, &s_Device);
 		if (err != VK_SUCCESS)
 			std::cerr << "Failed creating logical device" << std::endl;
 
@@ -126,8 +123,8 @@ namespace Low
 		vkGetDeviceQueue(Device(), indices.Graphics.value(), 0, &graphics);
 		vkGetDeviceQueue(Device(), indices.Presentation.value(), 0, &present);
 
-		s_VulkanCoreData.GraphicsQueue = CreateRef<Queue>(graphics, Queue::QueueType::Graphics);
-		s_VulkanCoreData.PresentQueue = CreateRef<Queue>(graphics, Queue::QueueType::Present);
+		s_GraphicsQueue = CreateRef<Queue>(graphics, Queue::QueueType::Graphics);
+		s_PresentQueue = CreateRef<Queue>(graphics, Queue::QueueType::Present);
 	}
 
 	void VulkanCore::PickPhysicalDevice()
@@ -143,7 +140,7 @@ namespace Low
 
 		for (auto device : physicalDevices)
 		{
-			float score = Support::GetPhysicalDeviceScore(device, Surface(), s_VulkanCoreData.Config.UserExtensions);
+			float score = Support::GetPhysicalDeviceScore(device, Surface(), s_Config.UserExtensions);
 			if (score > currScore)
 			{
 				currScore = score;
@@ -153,37 +150,7 @@ namespace Low
 
 		if (bestDevice == VK_NULL_HANDLE)
 			std::cerr << "Couldn't find a suitable GPU" << std::endl;
-		s_VulkanCoreData.PhysicalDevice = bestDevice;
-	}
-
-	VkDevice VulkanCore::Device()
-	{
-		return s_VulkanCoreData.Device;
-	}
-
-	VkPhysicalDevice VulkanCore::PhysicalDevice()
-	{
-		return s_VulkanCoreData.PhysicalDevice;
-	}
-
-	VkInstance VulkanCore::Instance()
-	{
-		return s_VulkanCoreData.Instance;
-	}
-
-	VkSurfaceKHR VulkanCore::Surface()
-	{
-		return s_VulkanCoreData.WindowSurface;
-	}
-
-	Ref<Queue> VulkanCore::GraphicsQueue()
-	{
-		return s_VulkanCoreData.GraphicsQueue;
-	}
-
-	Ref<Queue>VulkanCore::PresentQueue()
-	{
-		return s_VulkanCoreData.PresentQueue;
+		s_PhysicalDevice = bestDevice;
 	}
 
 }

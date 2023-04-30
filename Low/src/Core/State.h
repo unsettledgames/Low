@@ -16,6 +16,9 @@ namespace Low
 		static Ref<CommandBuffer> CommandBuffer();
 		static Ref<GraphicsPipeline> Pipeline();
 		static Ref<Framebuffer> Framebuffer();
+
+		static uint32_t CurrentImageIndex();
+		static uint32_t CurrentFramebufferIndex();
 	
 	private:
 
