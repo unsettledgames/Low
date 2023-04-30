@@ -121,6 +121,8 @@ namespace Low
 			return dummy;
 		}
 
+		inline operator VkFramebuffer() { return m_Handle; }
+
 	private:
 		VkFramebuffer m_Handle = VK_NULL_HANDLE;
 		VkImageView m_ImageView = VK_NULL_HANDLE;

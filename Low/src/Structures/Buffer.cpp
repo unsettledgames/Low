@@ -2,7 +2,7 @@
 #include <Hardware/Memory.h>
 
 #include <Vulkan/VulkanCore.h>
-#include <Vulkan/Command/OneTimeCommands.h>
+#include <Vulkan/Command/ImmediateCommands.h>
 
 #include <stdexcept>
 
@@ -25,7 +25,7 @@ namespace Low
 		memcpy(tmpData, data, (size_t)size);
 		vkUnmapMemory(VulkanCore::Device(), stagingBuffer.Memory());
 
-		OneTimeCommands::CopyBuffer(m_Handle,  stagingBuffer.Handle(), size);
+		ImmediateCommands::CopyBuffer(m_Handle, stagingBuffer, size);
 	}
 
 	void Buffer::Init(uint32_t size, BufferUsage usage)

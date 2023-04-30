@@ -3,7 +3,7 @@
 #include <Hardware/Memory.h>
 
 #include <Vulkan/VulkanCore.h>
-#include <Vulkan/Command/OneTimeCommands.h>
+#include <Vulkan/Command/ImmediateCommands.h>
 
 #include <stb_image.h>
 
@@ -104,9 +104,9 @@ namespace Low
 		if (vkCreateSampler(VulkanCore::Device(), &samplerInfo, nullptr, &m_Sampler) != VK_SUCCESS)
 			throw std::runtime_error("Couldn't create sampler");
 
-		OneTimeCommands::TransitionImageLayout(m_Image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-		OneTimeCommands::CopyBufferToImage(m_Image, m_Buffer->Handle(), m_Width, m_Height);
-		OneTimeCommands::TransitionImageLayout(m_Image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		ImmediateCommands::TransitionImageLayout(m_Image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		ImmediateCommands::CopyBufferToImage(m_Image, *m_Buffer, m_Width, m_Height);
+		ImmediateCommands::TransitionImageLayout(m_Image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	}
 
 	Texture::~Texture()

@@ -11,6 +11,8 @@ namespace Low
 		GLFWwindow* WindowHandle;
 	};
 
+	class Queue;
+
 	class VulkanCore
 	{
 	public:
@@ -19,9 +21,8 @@ namespace Low
 		static VkPhysicalDevice PhysicalDevice();
 		static VkSurfaceKHR Surface();
 
-		// [TMP]
-		static VkQueue GraphicsQueue();
-		static VkQueue PresentQueue();
+		static Ref<Queue> GraphicsQueue();
+		static Ref<Queue> PresentQueue();
 
 		static void Init(const VulkanCoreConfig& config);
 

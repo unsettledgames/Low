@@ -1,9 +1,10 @@
-#include <Vulkan/Command/OneTimeCommands.h>
+#include <Vulkan/Command/ImmediateCommands.h>
 #include <Core/Application.h>
 
 #include <Hardware/Support.h>
 #include <Vulkan/VulkanCore.h>
 #include <Vulkan/RenderPass.h>
+#include <Vulkan/Queue.h>
 #include <Renderer.h>
 
 #include <imgui.h>
@@ -103,7 +104,7 @@ namespace Lower
         init_info.Instance = Low::VulkanCore::Instance();
         init_info.PhysicalDevice = Low::VulkanCore::PhysicalDevice();
         init_info.Device = Low::VulkanCore::Device();
-        init_info.Queue = Low::VulkanCore::GraphicsQueue();
+        init_info.Queue = *Low::VulkanCore::GraphicsQueue();
         init_info.DescriptorPool = imguiPool;
         init_info.MinImageCount = 3;
         init_info.ImageCount = 3;
@@ -112,9 +113,9 @@ namespace Lower
         ImGui_ImplVulkan_Init(&init_info, imGuiRenderPass);
 
         //execute a gpu command to upload imgui font textures
-        VkCommandBuffer buf = Low::OneTimeCommands::Begin();
+        VkCommandBuffer buf = Low::ImmediateCommands::Begin();
         ImGui_ImplVulkan_CreateFontsTexture(buf);
-        Low::OneTimeCommands::End(buf);
+        Low::ImmediateCommands::End(buf);
 
         //clear font textures from cpu data
         ImGui_ImplVulkan_DestroyFontUploadObjects();

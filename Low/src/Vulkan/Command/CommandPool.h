@@ -13,7 +13,7 @@ namespace Low
 
 		std::vector<Ref<CommandBuffer>> AllocateCommandBuffers(uint32_t count);
 
-		inline VkCommandPool Handle() { return m_Handle; }
+		inline operator VkCommandPool() { return m_Handle; }
 
 	private:
 		VkCommandPool m_Handle;

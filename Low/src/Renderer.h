@@ -23,6 +23,7 @@
 *		- End
 * 
 *	Render passes can be re-recorded every time or recorded once and then reused
+*   Each render pass renders using its own pipeline.
 * 
 *	RENDER PASS
 *		- Begin:

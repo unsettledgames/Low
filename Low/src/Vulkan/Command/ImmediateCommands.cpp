@@ -1,5 +1,6 @@
-#include <Vulkan/Command/OneTimeCommands.h>
+#include <Vulkan/Command/ImmediateCommands.h>
 #include <Structures/Buffer.h>
+#include <Vulkan/Queue.h>
 #include <Vulkan/VulkanCore.h>
 
 namespace Low
@@ -9,7 +10,7 @@ namespace Low
 		VkCommandPool CommandPool;
 	} s_OTCState;
 
-	void OneTimeCommands::CopyBuffer(VkBuffer dst, VkBuffer src, size_t size)
+	void ImmediateCommands::CopyBuffer(VkBuffer dst, VkBuffer src, size_t size)
 	{
 		VkCommandBuffer commandBuffer = Begin();
 		{
@@ -22,7 +23,7 @@ namespace Low
 		End(commandBuffer);
 	}
 
-	void OneTimeCommands::CopyBufferToImage(VkImage dst, VkBuffer src, uint32_t width, uint32_t height)
+	void ImmediateCommands::CopyBufferToImage(VkImage dst, VkBuffer src, uint32_t width, uint32_t height)
 	{
 		VkCommandBuffer cmdBuf = Begin();
 		{
@@ -45,7 +46,7 @@ namespace Low
 		End(cmdBuf);
 	}
 
-	void OneTimeCommands::TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout)
+	void ImmediateCommands::TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout)
 	{
 		VkCommandBuffer cmdBuf = Begin();
 		{
@@ -109,7 +110,7 @@ namespace Low
 		End(cmdBuf);
 	}
 
-	VkCommandBuffer OneTimeCommands::Begin()
+	VkCommandBuffer ImmediateCommands::Begin()
 	{
 		VkCommandBufferAllocateInfo allocInfo{};
 		VkCommandBuffer commandBuffer;
@@ -132,7 +133,7 @@ namespace Low
 		return commandBuffer;
 	}
 
-	void OneTimeCommands::End(VkCommandBuffer cmdBuffer)
+	void ImmediateCommands::End(VkCommandBuffer cmdBuffer)
 	{
 		vkEndCommandBuffer(cmdBuffer);
 
@@ -141,13 +142,13 @@ namespace Low
 		submit.commandBufferCount = 1;
 		submit.pCommandBuffers = &cmdBuffer;
 
-		vkQueueSubmit(VulkanCore::GraphicsQueue(), 1, &submit, VK_NULL_HANDLE);
-		vkQueueWaitIdle(VulkanCore::GraphicsQueue());
+		vkQueueSubmit(*VulkanCore::GraphicsQueue(), 1, &submit, VK_NULL_HANDLE);
+		vkQueueWaitIdle(*VulkanCore::GraphicsQueue());
 
 		vkFreeCommandBuffers(VulkanCore::Device(), s_OTCState.CommandPool, 1, &cmdBuffer);
 	}
 
-	void OneTimeCommands::Init(VkCommandPool pool)
+	void ImmediateCommands::Init(VkCommandPool pool)
 	{
 		s_OTCState.CommandPool = pool;
 	}

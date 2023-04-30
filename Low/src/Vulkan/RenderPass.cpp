@@ -1,4 +1,7 @@
+#include <Core/State.h>
 #include <Vulkan/RenderPass.h>
+#include <Vulkan/Command/CommandBuffer.h>
+#include <Vulkan/GraphicsPipeline.h>
 #include <Vulkan/VulkanCore.h>
 
 #include <Structures/Framebuffer.h>
@@ -49,5 +52,31 @@ namespace Low
 
 		if (vkCreateRenderPass(VulkanCore::Device(), &renderPassInfo, nullptr, &m_Handle))
 			throw std::runtime_error("Failed to create render pass");
+	}
+
+	void RenderPass::Begin(Ref<GraphicsPipeline> pipeline, const glm::vec2& screenSize)
+	{
+		VkRect2D renderArea;
+		renderArea.extent = { (uint32_t)screenSize.x, (uint32_t)screenSize.y };
+		renderArea.offset = { 0, 0 };
+
+		std::array<VkClearValue, 2> clearColors;
+		clearColors[0].color = { 0.0f, 0.0f, 0.0f, 1.0f };
+		clearColors[1].depthStencil = { 1.0f, 0 };
+
+		VkRenderPassBeginInfo renderPassInfo{};
+		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		renderPassInfo.renderPass = m_Handle;
+		renderPassInfo.framebuffer = State::Framebuffer()->Handle();
+		renderPassInfo.renderArea = renderArea;
+		renderPassInfo.clearValueCount = clearColors.size();
+		renderPassInfo.pClearValues = clearColors.data();
+
+		vkCmdBeginRenderPass(*State::CommandBuffer(), &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+	}
+
+	void RenderPass::End()
+	{
+		vkCmdEndRenderPass(*State::CommandBuffer());
 	}
 }

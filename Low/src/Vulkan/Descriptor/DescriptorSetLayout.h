@@ -7,7 +7,7 @@ namespace Low
 	public:
 		DescriptorSetLayout();
 
-		inline VkDescriptorSetLayout Handle() { return m_Handle; }
+		inline operator VkDescriptorSetLayout() { return m_Handle; }
 
 	private:
 		VkDescriptorSetLayout m_Handle;

@@ -1,5 +1,7 @@
+#include <Core/State.h>
 #include <Vulkan/GraphicsPipeline.h>
 #include <Vulkan/RenderPass.h>
+#include <Vulkan/Command/CommandBuffer.h>
 #include <Vulkan/Descriptor/DescriptorSetLayout.h>
 #include <Vulkan/VulkanCore.h>
 
@@ -119,7 +121,7 @@ namespace Low
 		colorBlending.blendConstants[3] = 0.0f;
 
 		VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
-		VkDescriptorSetLayout layout = descLayout->Handle();
+		VkDescriptorSetLayout layout = *descLayout;
 
 		// Push constants
 		VkPushConstantRange pushConsts;
@@ -150,12 +152,22 @@ namespace Low
 		pipelineCreateInfo.pColorBlendState = &colorBlending;
 		pipelineCreateInfo.pDynamicState = &dynamicState;
 		pipelineCreateInfo.layout = m_Layout;
-		pipelineCreateInfo.renderPass = renderPass->Handle();
+		pipelineCreateInfo.renderPass = *renderPass;
 		pipelineCreateInfo.subpass = 0;
 		pipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
 		pipelineCreateInfo.basePipelineIndex = -1;
 
 		if (vkCreateGraphicsPipelines(VulkanCore::Device(), VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &m_Handle) != VK_SUCCESS)
 			throw std::runtime_error("Couldn't create graphics pipeline");
+	}
+
+	void GraphicsPipeline::Bind()
+	{
+		vkCmdBindPipeline(*State::CommandBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS, m_Handle);
+	}
+
+	void GraphicsPipeline::Unbind()
+	{
+
 	}
 }

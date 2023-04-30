@@ -15,11 +15,12 @@ namespace Low
 
 		~Buffer();
 		
-		inline VkBuffer& Handle() { return m_Handle; }
-		inline VkDeviceMemory& Memory() { return m_Memory; }
+		inline VkDeviceMemory Memory() { return m_Memory; }
 
 		inline size_t Size() { return m_Size; }
 		void SetData(void* data);
+
+		inline operator VkBuffer() { return m_Handle; }
 
 	private:
 		void Init(uint32_t size, BufferUsage usage);

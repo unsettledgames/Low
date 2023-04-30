@@ -4,7 +4,7 @@ namespace Low
 {
 	class Buffer;
 
-	class OneTimeCommands
+	class ImmediateCommands
 	{
 	public:
 		static void Init(VkCommandPool pool);

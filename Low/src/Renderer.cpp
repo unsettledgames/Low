@@ -10,6 +10,7 @@
 
 #include <Core/Debug.h>
 #include <Vulkan/VulkanCore.h>
+#include <Vulkan/Queue.h>
 #include <Vulkan/Swapchain.h>
 #include <Vulkan/RenderPass.h>
 #include <Vulkan/GraphicsPipeline.h>
@@ -20,7 +21,7 @@
 
 #include <Vulkan/Command/CommandPool.h>
 #include <Vulkan/Command/CommandBuffer.h>
-#include <Vulkan/Command/OneTimeCommands.h>
+#include <Vulkan/Command/ImmediateCommands.h>
 
 #include <Hardware/Support.h>
 #include <Hardware/Memory.h>
@@ -61,8 +62,8 @@ namespace Low
 		VkSurfaceKHR WindowSurface = VK_NULL_HANDLE;
 		VkSwapchainKHR Swapchain = VK_NULL_HANDLE;
 
-		VkQueue GraphicsQueue = VK_NULL_HANDLE;
-		VkQueue PresentationQueue = VK_NULL_HANDLE;
+		Ref<Queue> GraphicsQueue = VK_NULL_HANDLE;
+		Ref<Queue> PresentationQueue = VK_NULL_HANDLE;
 
 		// Resources
 		RendererResources* Resources;
@@ -168,7 +169,7 @@ namespace Low
 			scissors.offset.x = 0.0f;
 			scissors.offset.y = 0.0f;
 
-			VkBuffer buffers[] = { s_Data.Resources->Mesh->VertexBuffer()->Handle()};
+			VkBuffer buffers[] = { *s_Data.Resources->Mesh->VertexBuffer() };
 			VkDeviceSize offsets[] = { 0 };
 
 			vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, s_Data.GraphicsPipeline);
@@ -177,7 +178,7 @@ namespace Low
 			vkCmdSetScissor(commandBuffer, 0, 1, &scissors);
 
 			vkCmdBindVertexBuffers(commandBuffer, 0, 1, buffers, offsets);
-			vkCmdBindIndexBuffer(commandBuffer, s_Data.Resources->Mesh->IndexBuffer()->Handle(), 0, VK_INDEX_TYPE_UINT32);
+			vkCmdBindIndexBuffer(commandBuffer, *s_Data.Resources->Mesh->IndexBuffer(), 0, VK_INDEX_TYPE_UINT32);
 			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, s_Data.PipelineLayout, 0, 1,
 				&s_Data.DescriptorSets[s_State.CurrentFrame], 0, nullptr);
 
@@ -303,7 +304,7 @@ namespace Low
 		for (uint32_t i = 0; i < s_Config.MaxFramesInFlight; i++)
 		{
 			VkDescriptorBufferInfo bufferInfo = {};
-			bufferInfo.buffer = s_Data.Resources->UniformBuffers[i]->Handle();
+			bufferInfo.buffer = *s_Data.Resources->UniformBuffers[i];
 			bufferInfo.offset = 0;
 			bufferInfo.range = sizeof(UniformBufferObject);
 
@@ -383,7 +384,7 @@ namespace Low
 
 		VkRenderPassBeginInfo renderPassInfo{};
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		renderPassInfo.renderPass = s_Data.RenderPass->Handle();
+		renderPassInfo.renderPass = *s_Data.RenderPass;
 		renderPassInfo.framebuffer = s_Data.Framebuffers[s_State.CurrentImage]->Handle();
 		renderPassInfo.renderArea.offset = { 0,0 };
 		renderPassInfo.renderArea.extent = s_Data.SwapchainExtent;
@@ -421,27 +422,27 @@ namespace Low
 		Ref<Swapchain> swapchain = CreateRef<Swapchain>(s_Data.WindowSurface, width, height);
 		s_Data.SwapchainRef = swapchain;
 
-		s_Data.Swapchain = swapchain->Handle();
+		s_Data.Swapchain = *swapchain;
 		s_Data.SwapchainExtent = { (uint32_t)width, (uint32_t)height };
 
 		glfwSetFramebufferSizeCallback(windowHandle, OnFramebufferResize);
 
 		Ref<DescriptorSetLayout> descriptorSetLayout = CreateRef<DescriptorSetLayout>();
-		s_Data.DescriptorSetLayout = descriptorSetLayout->Handle();
+		s_Data.DescriptorSetLayout = *descriptorSetLayout;
 
 		Ref<DescriptorPool> descriptorPool = CreateRef<DescriptorPool>(s_Config.MaxFramesInFlight);
-		s_Data.DescriptorPool = descriptorPool->Handle();
+		s_Data.DescriptorPool = *descriptorPool;
 
 		CreateUniformBuffers();
 
 		Ref<CommandPool> commandPool = CreateRef<CommandPool>(Support::GetQueueFamilyIndices(VulkanCore::PhysicalDevice(), s_Data.WindowSurface));
-		s_Data.CommandPool = commandPool->Handle();
+		s_Data.CommandPool = *commandPool;
 
-		OneTimeCommands::Init(commandPool->Handle());
+		ImmediateCommands::Init(*commandPool);
 
 		std::vector<Ref<CommandBuffer>> commandBuffers = commandPool->AllocateCommandBuffers(s_Config.MaxFramesInFlight);
 		for (auto& buf : commandBuffers)
-			s_Data.CommandBuffers.push_back(buf->Handle());
+			s_Data.CommandBuffers.push_back(*buf);
 
 		std::vector<FramebufferAttachmentSpecs> attachmentSpecs = {
 			{AttachmentType::Color, VK_FORMAT_B8G8R8A8_SRGB, 1, true},
@@ -459,7 +460,7 @@ namespace Low
 				else
 					images.push_back(VK_NULL_HANDLE);
 
-			Ref<Framebuffer> framebuffer = CreateRef<Framebuffer>(s_Data.RenderPass->Handle(), width, height, attachmentSpecs, images);
+			Ref<Framebuffer> framebuffer = CreateRef<Framebuffer>(*s_Data.RenderPass, width, height, attachmentSpecs, images);
 			s_Data.Framebuffers.push_back(framebuffer);
 		}
 
@@ -467,7 +468,7 @@ namespace Low
 		s_Data.Resources->Shader = shader;
 
 		Ref<GraphicsPipeline> graphicsPipeline = CreateRef<GraphicsPipeline>(shader, descriptorSetLayout, s_Data.RenderPass, glm::vec2(s_Data.SwapchainExtent.width, s_Data.SwapchainExtent.height));
-		s_Data.GraphicsPipeline = graphicsPipeline->Handle();
+		s_Data.GraphicsPipeline = *graphicsPipeline;
 		s_Data.PipelineLayout = graphicsPipeline->Layout();
 
 		/* TODO:
@@ -555,7 +556,7 @@ namespace Low
 		submitInfo.signalSemaphoreCount = 1;
 		submitInfo.pSignalSemaphores = &s_Synch[s_State.CurrentFrame].SemRenderFinished;
 
-		if (vkQueueSubmit(s_Data.GraphicsQueue, 1, &submitInfo, s_Synch[s_State.CurrentFrame].FenInFlight) != VK_SUCCESS)
+		if (vkQueueSubmit(*s_Data.GraphicsQueue, 1, &submitInfo, s_Synch[s_State.CurrentFrame].FenInFlight) != VK_SUCCESS)
 			throw std::runtime_error("Couldn't submit queue for rendering");
 
 		VkPresentInfoKHR presentInfo = {};
@@ -569,7 +570,7 @@ namespace Low
 		presentInfo.pImageIndices = &s_State.CurrentImage;
 		presentInfo.pResults = nullptr;
 
-		res = vkQueuePresentKHR(s_Data.PresentationQueue, &presentInfo);
+		res = vkQueuePresentKHR(*s_Data.PresentationQueue, &presentInfo);
 		if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR || s_State.FramebufferResized)
 		{
 			RecreateSwapchain();
@@ -589,7 +590,7 @@ namespace Low
 
 		vkDestroyPipelineLayout(VulkanCore::Device(), s_Data.PipelineLayout, nullptr);
 		vkDestroyPipeline(VulkanCore::Device(), s_Data.GraphicsPipeline, nullptr);
-		vkDestroyRenderPass(VulkanCore::Device(), s_Data.RenderPass->Handle(), nullptr);
+		vkDestroyRenderPass(VulkanCore::Device(), *s_Data.RenderPass, nullptr);
 
 		vkDestroyCommandPool(VulkanCore::Device(), s_Data.CommandPool, nullptr);
 
@@ -604,6 +605,5 @@ namespace Low
 		vkDestroyDescriptorSetLayout(VulkanCore::Device(), s_Data.DescriptorSetLayout, nullptr);
 
 		delete s_Data.Resources;
-
 	}
 }

@@ -7,7 +7,7 @@ namespace Low
 	public:
 		DescriptorPool(uint32_t count);
 
-		inline VkDescriptorPool Handle() { return m_Handle; }
+		inline operator VkDescriptorPool() { return m_Handle; }
 	private:
 		VkDescriptorPool m_Handle;
 	};

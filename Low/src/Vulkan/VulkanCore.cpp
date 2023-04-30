@@ -1,5 +1,6 @@
 #include <Vulkan/VulkanCore.h>
 #include <Core/Debug.h>
+#include <Vulkan/Queue.h>
 #include <Hardware/Support.h>
 
 #include <GLFW/glfw3.h>
@@ -13,8 +14,8 @@ namespace Low
 		VkPhysicalDevice PhysicalDevice = VK_NULL_HANDLE;
 		VkSurfaceKHR WindowSurface = VK_NULL_HANDLE;
 		
-		VkQueue GraphicsQueue = VK_NULL_HANDLE;
-		VkQueue PresentQueue = VK_NULL_HANDLE;
+		Ref<Queue> GraphicsQueue = VK_NULL_HANDLE;
+		Ref<Queue> PresentQueue = VK_NULL_HANDLE;
 
 		VulkanCoreConfig Config = {};
 	} s_VulkanCoreData;
@@ -120,8 +121,13 @@ namespace Low
 		if (err != VK_SUCCESS)
 			std::cerr << "Failed creating logical device" << std::endl;
 
-		vkGetDeviceQueue(Device(), indices.Graphics.value(), 0, &s_VulkanCoreData.GraphicsQueue);
-		vkGetDeviceQueue(Device(), indices.Presentation.value(), 0, &s_VulkanCoreData.PresentQueue);
+		VkQueue graphics, present;
+
+		vkGetDeviceQueue(Device(), indices.Graphics.value(), 0, &graphics);
+		vkGetDeviceQueue(Device(), indices.Presentation.value(), 0, &present);
+
+		s_VulkanCoreData.GraphicsQueue = CreateRef<Queue>(graphics, Queue::QueueType::Graphics);
+		s_VulkanCoreData.PresentQueue = CreateRef<Queue>(graphics, Queue::QueueType::Present);
 	}
 
 	void VulkanCore::PickPhysicalDevice()
@@ -170,12 +176,12 @@ namespace Low
 		return s_VulkanCoreData.WindowSurface;
 	}
 
-	VkQueue VulkanCore::GraphicsQueue()
+	Ref<Queue> VulkanCore::GraphicsQueue()
 	{
 		return s_VulkanCoreData.GraphicsQueue;
 	}
 
-	VkQueue VulkanCore::PresentQueue()
+	Ref<Queue>VulkanCore::PresentQueue()
 	{
 		return s_VulkanCoreData.PresentQueue;
 	}
