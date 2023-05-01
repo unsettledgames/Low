@@ -51,6 +51,7 @@ namespace Low
 		{ 
 			if (s_Semaphores.find(name) != s_Semaphores.end())
 				return s_Semaphores[name];
+			std::cout << "ERROR: couldn't find semaphore " << name << std::endl;
 			return nullptr;
 		}
 
@@ -58,6 +59,7 @@ namespace Low
 		{
 			if (s_Fences.find(name) != s_Fences.end())
 				return s_Fences[name];
+			std::cout << "ERROR: couldn't find fence " << name << std::endl;
 			return nullptr;
 		}
 	

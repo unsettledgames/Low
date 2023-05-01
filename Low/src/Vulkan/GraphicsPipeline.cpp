@@ -161,13 +161,15 @@ namespace Low
 			throw std::runtime_error("Couldn't create graphics pipeline");
 	}
 
+	GraphicsPipeline::~GraphicsPipeline()
+	{
+		vkDeviceWaitIdle(VulkanCore::Device());
+		vkDestroyPipelineLayout(VulkanCore::Device(), m_Layout, nullptr);
+		vkDestroyPipeline(VulkanCore::Device(), m_Handle, nullptr);
+	}
+
 	void GraphicsPipeline::Bind()
 	{
 		vkCmdBindPipeline(*State::CommandBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS, m_Handle);
-	}
-
-	void GraphicsPipeline::Unbind()
-	{
-
-	}
+	}	
 }

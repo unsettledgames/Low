@@ -54,11 +54,30 @@ namespace Low
 			throw std::runtime_error("Failed to create render pass");
 	}
 
+	RenderPass::~RenderPass()
+	{
+		vkDestroyRenderPass(VulkanCore::Device(), m_Handle, nullptr);
+	}
+
 	void RenderPass::Begin(Ref<GraphicsPipeline> pipeline, const glm::vec2& screenSize)
 	{
 		VkRect2D renderArea;
 		renderArea.extent = { (uint32_t)screenSize.x, (uint32_t)screenSize.y };
 		renderArea.offset = { 0, 0 };
+
+		VkViewport viewport = {};
+		VkRect2D scissors = {};
+
+		viewport.x = 0.0f;
+		viewport.y = 0.0f;
+		viewport.width = screenSize.x;
+		viewport.height = screenSize.y;
+		viewport.minDepth = 0.0f;
+		viewport.maxDepth = 1.0f;
+
+		scissors.extent = renderArea.extent;
+		scissors.offset.x = 0.0f;
+		scissors.offset.y = 0.0f;
 
 		std::array<VkClearValue, 2> clearColors;
 		clearColors[0].color = { 0.0f, 0.0f, 0.0f, 1.0f };
@@ -73,6 +92,10 @@ namespace Low
 		renderPassInfo.pClearValues = clearColors.data();
 
 		vkCmdBeginRenderPass(*State::CommandBuffer(), &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+		pipeline->Bind();
+
+		vkCmdSetViewport(*State::CommandBuffer(), 0, 1, &viewport);
+		vkCmdSetScissor(*State::CommandBuffer(), 0, 1, &scissors);
 	}
 
 	void RenderPass::End()

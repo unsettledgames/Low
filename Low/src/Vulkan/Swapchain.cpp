@@ -4,15 +4,27 @@
 
 namespace Low
 {
-	/*
-		Config:
-			- Width / height
-			- Surface
-	*/
-	Swapchain::Swapchain(VkSurfaceKHR surface, uint32_t width, uint32_t height) : m_Extent({width, height})
+	Swapchain::Swapchain(uint32_t width, uint32_t height)
 	{
+		Init(width, height);
+	}
+
+	Swapchain::~Swapchain()
+	{
+		Cleanup();
+	}
+
+	void Swapchain::Invalidate(uint32_t width, uint32_t height)
+	{
+		Cleanup();
+		Init(width, height);
+	}
+
+	void Swapchain::Init(uint32_t width, uint32_t height)
+	{
+		m_Extent = { width, height };
 		// Swapchain properties
-		SwapchainSupportDetails swapchainProps = Support::GetSwapchainSupportDetails(VulkanCore::PhysicalDevice(), surface);
+		SwapchainSupportDetails swapchainProps = Support::GetSwapchainSupportDetails(VulkanCore::PhysicalDevice(), VulkanCore::Surface());
 		if (swapchainProps.Formats.empty() || swapchainProps.PresentModes.empty())
 			throw std::runtime_error("Swapchain has no formats or present modes");
 
@@ -70,7 +82,7 @@ namespace Low
 
 		VkSwapchainCreateInfoKHR createInfo = {};
 		createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-		createInfo.surface = surface;
+		createInfo.surface = VulkanCore::Surface();
 		createInfo.minImageCount = imageCount;
 		createInfo.imageFormat = swapchainFormat.format;
 		createInfo.imageColorSpace = swapchainFormat.colorSpace;
@@ -106,17 +118,12 @@ namespace Low
 
 		uint32_t size = m_Images.size();
 		vkGetSwapchainImagesKHR(VulkanCore::Device(), m_Handle, &size, m_Images.data());
-		CreateImageViews();
 	}
 
-
-	void Swapchain::CreateImageViews()
+	void Swapchain::Cleanup()
 	{
-		m_ImageViews.resize(m_Images.size());
-
-		for (uint32_t i = 0; i < m_ImageViews.size(); i++)
-		{
-			
-		}
+		for (auto& image : m_ImageViews)
+			vkDestroyImageView(VulkanCore::Device(), image, nullptr);
+		vkDestroySwapchainKHR(VulkanCore::Device(), m_Handle, nullptr);
 	}
 }

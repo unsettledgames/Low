@@ -6,16 +6,22 @@ namespace Low
 	{
 	public:
 		Swapchain() = default;
-		Swapchain(VkSurfaceKHR surface, uint32_t width, uint32_t height);
+		~Swapchain();
+		Swapchain(uint32_t width, uint32_t height);
+
+		void Invalidate(uint32_t width, uint32_t height);
 
 		inline std::vector<VkImage> Images() { return m_Images; }
 		inline std::vector<VkImageView> ImageViews() { return m_ImageViews; }
 		inline VkFormat Format() { return m_ImageFormat; }
 
+		inline glm::vec2 Extent() { return m_Extent; }
+
 		inline operator VkSwapchainKHR() { return m_Handle; }
 
 	private:
-		void CreateImageViews();
+		void Cleanup();
+		void Init(uint32_t width, uint32_t height);
 
 	private:
 		VkSwapchainKHR m_Handle = VK_NULL_HANDLE;

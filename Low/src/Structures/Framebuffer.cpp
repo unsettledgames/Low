@@ -8,7 +8,29 @@ namespace Low
 	Framebuffer::Framebuffer(VkRenderPass renderPass, uint32_t width, uint32_t height, std::vector<FramebufferAttachmentSpecs>& specs,
 		std::vector<VkImage> images) : m_Width(width), m_Height(height)
 	{
+		Init(renderPass, width, height, specs, images);
+	}
+
+	Framebuffer::~Framebuffer()
+	{
+		Cleanup();
+	}
+
+	void Framebuffer::Invalidate(VkRenderPass renderPass, uint32_t width, uint32_t height, std::vector<FramebufferAttachmentSpecs>& specs,
+		std::vector<VkImage> images)
+	{
+		Cleanup();
+		Init(renderPass, width, height, specs, images);
+	}
+
+	void Framebuffer::Init(VkRenderPass renderPass, uint32_t width, uint32_t height, std::vector<FramebufferAttachmentSpecs>& specs,
+		std::vector<VkImage> images)
+	{
 		uint32_t attachmentIdx = 0;
+
+		m_Attachments.resize(0);
+		m_Width = width;
+		m_Height = height;
 
 		for (auto& config : specs)
 		{
@@ -98,5 +120,18 @@ namespace Low
 
 		if (vkCreateFramebuffer(VulkanCore::Device(), &framebufferInfo, nullptr, &m_Handle) != VK_SUCCESS)
 			throw std::runtime_error("Couldn't create framebuffer");
+	}
+
+	void Framebuffer::Cleanup()
+	{
+		for (auto& attachment : m_Attachments)
+		{
+			if (!attachment.Specs.IsSwapchain)
+				vkDestroyImage(VulkanCore::Device(), attachment.Image, nullptr);
+			vkDestroyImageView(VulkanCore::Device(), attachment.ImageView, nullptr);
+			vkFreeMemory(VulkanCore::Device(), attachment.ImageMemory, nullptr);
+		}
+
+		vkDestroyFramebuffer(VulkanCore::Device(), m_Handle, nullptr);
 	}
 }

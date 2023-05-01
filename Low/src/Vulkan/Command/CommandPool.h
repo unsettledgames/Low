@@ -10,6 +10,7 @@ namespace Low
 	{
 	public:
 		CommandPool(const QueueFamilyIndices& queueIndices);
+		~CommandPool();
 
 		std::vector<Ref<CommandBuffer>> AllocateCommandBuffers(uint32_t count);
 

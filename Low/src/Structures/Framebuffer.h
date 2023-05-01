@@ -73,17 +73,15 @@ namespace Low
 		FramebufferAttachment(const FramebufferAttachmentSpecs& specs) : Specs(specs) {}
 		FramebufferAttachment(const FramebufferAttachment&) = default;
 	};
-
 	
-
 	class Framebuffer
 	{
 	public:
 		Framebuffer(VkRenderPass renderPass, uint32_t width, uint32_t height, std::vector<FramebufferAttachmentSpecs>& specs,
 			std::vector<VkImage> images);
+		~Framebuffer();
 
 		inline VkFramebuffer Handle() { return m_Handle; }
-		inline VkImageView ImageView() { return m_ImageView; }
 
 		inline std::vector<VkAttachmentDescription> Descriptions() 
 		{
@@ -108,24 +106,28 @@ namespace Low
 			{
 				if (m_Attachments[i].Specs.Type == type)
 				{
-					if (idx == index)
-						return m_Attachments[i];
-					else
-						idx++;
+					if (idx == index) return m_Attachments[i];
+					else idx++;
 				}
 			}
 
 			FramebufferAttachment dummy;
 			dummy.Specs.Type = AttachmentType::None;
-
 			return dummy;
 		}
+
+		void Invalidate(VkRenderPass renderPass, uint32_t width, uint32_t height, std::vector<FramebufferAttachmentSpecs>& specs,
+			std::vector<VkImage> images);
 
 		inline operator VkFramebuffer() { return m_Handle; }
 
 	private:
+		void Cleanup();
+		void Init(VkRenderPass renderPass, uint32_t width, uint32_t height, std::vector<FramebufferAttachmentSpecs>& specs,
+			std::vector<VkImage> images);
+
+	private:
 		VkFramebuffer m_Handle = VK_NULL_HANDLE;
-		VkImageView m_ImageView = VK_NULL_HANDLE;
 
 		uint32_t m_Width;
 		uint32_t m_Height;

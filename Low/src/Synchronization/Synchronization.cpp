@@ -20,10 +20,8 @@ namespace Low
 
 	Semaphore::~Semaphore()
 	{
-		/*
 		for (auto& sem : m_Handles)
 			vkDestroySemaphore(VulkanCore::Device(), sem, nullptr);
-			*/
 	}
 
 	Semaphore::operator VkSemaphore() { return m_Handles[State::CurrentFramebufferIndex()]; }
@@ -44,10 +42,8 @@ namespace Low
 
 	Fence::~Fence()
 	{
-		/*
 		for (auto& fen : m_Handles)
 			vkDestroyFence(VulkanCore::Device(), fen, nullptr);
-			*/
 	}
 
 	Fence::operator VkFence() { return m_Handles[State::CurrentFramebufferIndex()]; }

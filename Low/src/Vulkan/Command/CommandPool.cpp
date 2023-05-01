@@ -17,6 +17,11 @@ namespace Low
 			throw std::runtime_error("Couldn't create command pool");
 	}
 
+	CommandPool::~CommandPool()
+	{
+		vkDestroyCommandPool(VulkanCore::Device(), m_Handle, nullptr);
+	}
+
 	std::vector<Ref<CommandBuffer>> CommandPool::AllocateCommandBuffers(uint32_t count)
 	{
 		std::vector<Ref<CommandBuffer>> ret;

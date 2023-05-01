@@ -10,6 +10,7 @@ namespace Low
 	{
 	public:
 		RenderPass(const std::vector<FramebufferAttachmentSpecs>& specs);
+		~RenderPass();
 
 		void Begin(Ref<GraphicsPipeline> pipeline, const glm::vec2& screenSize);
 		void End();
