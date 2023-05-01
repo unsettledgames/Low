@@ -18,11 +18,14 @@ namespace Low
 
 	void State::BindCommandBuffer(Ref<Low::CommandBuffer> buf) { s_CoreState.CommandBuffer = buf; }
 	void State::BindPipeline(Ref<GraphicsPipeline> pipeline) { s_CoreState.Pipeline = pipeline; }
-	void State::SetFramebuffer(Ref<Low::Framebuffer> buf) { s_CoreState.Framebuffer = buf; }
 
+	void State::SetCurrentFrameIndex(uint32_t index) { s_CoreState.CurrentFramebufferIndex = index; }
+	void State::SetCurrentImageIndex(uint32_t index) { s_CoreState.CurrentImageIndex = index; }
+	void State::SetFramebuffer(Ref<Low::Framebuffer> fb) { s_CoreState.Framebuffer = fb; }
+
+	Ref<Framebuffer> State::Framebuffer() { return s_CoreState.Framebuffer; }
 	Ref<CommandBuffer> State::CommandBuffer() { return s_CoreState.CommandBuffer; }
 	Ref<GraphicsPipeline> State::Pipeline() { return s_CoreState.Pipeline; }
-	Ref<Framebuffer> State::Framebuffer() { return s_CoreState.Framebuffer; }
 
 	uint32_t State::CurrentFramebufferIndex() { return s_CoreState.CurrentFramebufferIndex; }
 	uint32_t State::CurrentImageIndex() { return s_CoreState.CurrentImageIndex; }

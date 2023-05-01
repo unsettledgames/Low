@@ -11,7 +11,10 @@ namespace Low
 	public:
 		static void BindCommandBuffer(Ref<CommandBuffer> buffer);
 		static void BindPipeline(Ref<GraphicsPipeline> pipeline);
-		static void SetFramebuffer(Ref<Framebuffer> buffer);
+
+		static void SetCurrentFrameIndex(uint32_t index);
+		static void SetCurrentImageIndex(uint32_t index);
+		static void SetFramebuffer(Ref<Framebuffer> fb);
 
 		static Ref<CommandBuffer> CommandBuffer();
 		static Ref<GraphicsPipeline> Pipeline();

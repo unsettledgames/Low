@@ -10,8 +10,6 @@ namespace Low
 		CommandBuffer(VkCommandBuffer buf);
 
 		void Reset();
-		void PushRenderPass(Ref<RenderPass> renderPass);
-
 		void Begin();
 		void End();
 
@@ -19,6 +17,5 @@ namespace Low
 
 	private:
 		VkCommandBuffer m_Handle;
-		std::vector<Ref<RenderPass>> m_RenderPasses;
 	};
 }

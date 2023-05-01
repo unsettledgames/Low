@@ -9,6 +9,9 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <Core/Debug.h>
+#include <Core/State.h>
+#include <Synchronization/Synchronization.h>
+
 #include <Vulkan/VulkanCore.h>
 #include <Vulkan/Queue.h>
 #include <Vulkan/Swapchain.h>
@@ -37,11 +40,9 @@
 #include <GLFW/glfw3.h>
 #include <stb_image.h>
 
-// This stuff should probably go in a VulkanCore class or something. Then expose globals init and shutdown that initialize and shutdown
-// everything. Instances, devices and stuff like that don't have much to do with the actual renderer
-
 namespace Low
 {
+	std::vector<Ref<CommandBuffer>> Renderer::s_CommandBuffers;
 	static RendererConfig s_Config;
 
 	struct RendererResources
@@ -96,17 +97,8 @@ namespace Low
 
 	struct RendererState
 	{
-		uint32_t CurrentFrame = 0;
-		uint32_t CurrentImage = 0;
 		bool FramebufferResized = false;
 	} s_State;
-
-	struct Synch
-	{
-		VkSemaphore SemImageAvailable;
-		VkSemaphore SemRenderFinished;
-		VkFence FenInFlight;
-	};
 
 	struct UniformBufferObject
 	{
@@ -114,33 +106,6 @@ namespace Low
 		glm::mat4 View;
 		glm::mat4 Projection;
 	};
-
-	std::vector<Synch> s_Synch;
-
-	static VkFormat FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features)
-	{
-		for (auto format : candidates)
-		{
-			VkFormatProperties props;
-			vkGetPhysicalDeviceFormatProperties(VulkanCore::PhysicalDevice(), format, &props);
-
-			if (tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & features) == features)
-				return format;
-			else if (tiling == VK_IMAGE_TILING_OPTIMAL && (props.optimalTilingFeatures & features) == features)
-				return format;
-		}
-
-		throw std::runtime_error("Couldn't find a supported depth format");
-	}
-
-	static VkFormat FindDepthFormat()
-	{
-		return FindSupportedFormat(
-			{ VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT },
-			VK_IMAGE_TILING_OPTIMAL,
-			VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT
-		);
-	}
 
 	static void RecordCommandBuffer(VkCommandBuffer commandBuffer)
 	{
@@ -180,7 +145,7 @@ namespace Low
 			vkCmdBindVertexBuffers(commandBuffer, 0, 1, buffers, offsets);
 			vkCmdBindIndexBuffer(commandBuffer, *s_Data.Resources->Mesh->IndexBuffer(), 0, VK_INDEX_TYPE_UINT32);
 			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, s_Data.PipelineLayout, 0, 1,
-				&s_Data.DescriptorSets[s_State.CurrentFrame], 0, nullptr);
+				&s_Data.DescriptorSets[State::CurrentFramebufferIndex()], 0, nullptr);
 
 			PushConsts consts;
 
@@ -200,22 +165,11 @@ namespace Low
 
 	static void CreateSynchronizationObjects()
 	{
-		s_Synch.resize(s_Config.MaxFramesInFlight);
+		Synchronization::Init(s_Config.MaxFramesInFlight);
 
-		for (uint32_t i = 0; i < s_Synch.size(); i++)
-		{
-			VkSemaphoreCreateInfo semInfo = {};
-			VkFenceCreateInfo fenInfo = {};
-
-			semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-			fenInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-			fenInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-
-			if (vkCreateSemaphore(VulkanCore::Device(), &semInfo, nullptr, &s_Synch[i].SemImageAvailable) != VK_SUCCESS ||
-				vkCreateSemaphore(VulkanCore::Device(), &semInfo, nullptr, &s_Synch[i].SemRenderFinished) != VK_SUCCESS ||
-				vkCreateFence(VulkanCore::Device(), &fenInfo, nullptr, &s_Synch[i].FenInFlight) != VK_SUCCESS)
-				throw std::runtime_error("Couldn't create synchronization structures");
-		}
+		Synchronization::CreateSemaphore("ImageAvailable");
+		Synchronization::CreateSemaphore("RenderFinished");
+		Synchronization::CreateFence("FrameInFlight");
 	}
 
 	static void CleanupSwapchain()
@@ -257,20 +211,6 @@ namespace Low
 	static void OnFramebufferResize(GLFWwindow* window, int width, int height)
 	{
 		s_State.FramebufferResized = true;
-	}
-
-	static uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags props)
-	{
-		VkPhysicalDeviceMemoryProperties memProperties;
-		vkGetPhysicalDeviceMemoryProperties(VulkanCore::PhysicalDevice(), &memProperties);
-
-		for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
-		{
-			if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & props) == props)
-				return i;
-		}
-
-		throw std::runtime_error("Couldn't find suitable memory type");
 	}
 
 	static void CreateUniformBuffers()
@@ -373,7 +313,6 @@ namespace Low
 	{
 		s_Data.Resources->Texture = CreateRef<Texture>("../../Assets/Models/Sphere/Rusty/rustediron2_basecolor.png", VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL);
 		s_Data.Resources->Roughness = CreateRef<Texture>("../../Assets/Models/Sphere/Rusty/rustediron2_metallic.png", VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL);
-	
 	}
 
 	void Renderer::BeginRenderPass(VkCommandBuffer cmdBuffer)
@@ -385,7 +324,7 @@ namespace Low
 		VkRenderPassBeginInfo renderPassInfo{};
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 		renderPassInfo.renderPass = *s_Data.RenderPass;
-		renderPassInfo.framebuffer = s_Data.Framebuffers[s_State.CurrentImage]->Handle();
+		renderPassInfo.framebuffer = *s_Data.Framebuffers[State::CurrentImageIndex()];
 		renderPassInfo.renderArea.offset = { 0,0 };
 		renderPassInfo.renderArea.extent = s_Data.SwapchainExtent;
 		renderPassInfo.clearValueCount = clearColors.size();
@@ -446,7 +385,7 @@ namespace Low
 
 		std::vector<FramebufferAttachmentSpecs> attachmentSpecs = {
 			{AttachmentType::Color, VK_FORMAT_B8G8R8A8_SRGB, 1, true},
-			{AttachmentType::Depth, FindDepthFormat(), 1, false}
+			{AttachmentType::Depth, VK_FORMAT_D32_SFLOAT, 1, false}
 		};
 
 		s_Data.RenderPass = CreateRef<RenderPass>(attachmentSpecs);
@@ -472,13 +411,10 @@ namespace Low
 		s_Data.PipelineLayout = graphicsPipeline->Layout();
 
 		/* TODO:
-		* - Easier way to create images
 		* - Expose uniform memory
-		* 
 		* - Remove as much stuff from s_Data (iteratively)
 		* 
 		* - Abstract DrawFrame
-		* - See if we can abstract stuff a bit more besides just copy pasting code in many classes (especially regarding uniforms)
 		* - Resource destruction
 		* - Implement basic API
 		* 
@@ -502,82 +438,82 @@ namespace Low
 
 		CreateSynchronizationObjects();
 	}
+
+	static VkCommandBuffer currCmdBuf;
 	
-
-	void Renderer::DrawFrame()
+	void Renderer::Begin()
 	{
-		/*
-			STAGES:
-			
-			- Upload / Update Uniforms
-			- Invalid swapchain if necessary
-			- Submit queue
-			- Present queue
-		*/
+		UpdateUniformBuffer(State::CurrentFramebufferIndex());
+		VkFence waits[] = { *Synchronization::GetFence("FrameInFlight") };
+		vkWaitForFences(VulkanCore::Device(), 1, waits, VK_TRUE, UINT64_MAX);
 
-		/*
-			COMMAND BUFFER
+		uint32_t imgIndex;
+		VkResult res = vkAcquireNextImageKHR(VulkanCore::Device(), s_Data.Swapchain, UINT64_MAX, *Synchronization::GetSemaphore("ImageAvailable"),
+			VK_NULL_HANDLE, &imgIndex);
+		if (res != VK_SUCCESS)
+			throw std::runtime_error("Couldn't acquire image");
+		State::SetCurrentImageIndex(imgIndex);
 
-			- Reset
-			- Record:
-				- Expose API
-		*/
-
-		VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-
-		UpdateUniformBuffer(s_State.CurrentFrame);
-		vkWaitForFences(VulkanCore::Device(), 1, &s_Synch[s_State.CurrentFrame].FenInFlight, VK_TRUE, UINT64_MAX);
-
-		VkResult res = vkAcquireNextImageKHR(VulkanCore::Device(), s_Data.Swapchain, UINT64_MAX, 
-			s_Synch[s_State.CurrentFrame].SemImageAvailable, VK_NULL_HANDLE, &s_State.CurrentImage);
 		if (res == VK_ERROR_OUT_OF_DATE_KHR)
 		{
 			RecreateSwapchain();
 			return;
 		}
 
-		vkResetFences(VulkanCore::Device(), 1, &s_Synch[s_State.CurrentFrame].FenInFlight);
-		vkResetCommandBuffer(s_Data.CommandBuffers[s_State.CurrentFrame], 0);
-		
-		bool inited = false;
-		if (!inited)
-		{
-			RecordCommandBuffer(s_Data.CommandBuffers[s_State.CurrentFrame]);
-			inited = true;
-		}
+		vkResetFences(VulkanCore::Device(), 1, waits);
+		vkResetCommandBuffer(s_Data.CommandBuffers[State::CurrentFramebufferIndex()], 0);
+	}
+
+	void Renderer::End()
+	{
+		VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+		std::vector<VkCommandBuffer> cmdBuffers(s_CommandBuffers.size());
+		for (uint32_t i = 0; i < cmdBuffers.size(); i++)
+			cmdBuffers[i] = *s_CommandBuffers[i];
 
 		VkSubmitInfo submitInfo = {};
+		VkSemaphore waits[] = { *Synchronization::GetSemaphore("ImageAvailable") };
+		VkSemaphore signals[] = { *Synchronization::GetSemaphore("RenderFinished") };
+
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 		submitInfo.waitSemaphoreCount = 1;
-		submitInfo.pWaitSemaphores = &s_Synch[s_State.CurrentFrame].SemImageAvailable;
+		submitInfo.pWaitSemaphores = waits;
 		submitInfo.pWaitDstStageMask = waitStages;
 		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &s_Data.CommandBuffers[s_State.CurrentFrame];
+		submitInfo.pCommandBuffers = &s_Data.CommandBuffers[State::CurrentFramebufferIndex()];
 		submitInfo.signalSemaphoreCount = 1;
-		submitInfo.pSignalSemaphores = &s_Synch[s_State.CurrentFrame].SemRenderFinished;
+		submitInfo.pSignalSemaphores = signals;
 
-		if (vkQueueSubmit(*s_Data.GraphicsQueue, 1, &submitInfo, s_Synch[s_State.CurrentFrame].FenInFlight) != VK_SUCCESS)
+		if (vkQueueSubmit(*s_Data.GraphicsQueue, 1, &submitInfo, *Synchronization::GetFence("FrameInFlight")) != VK_SUCCESS)
 			throw std::runtime_error("Couldn't submit queue for rendering");
 
+		uint32_t currImage = State::CurrentImageIndex();
+		VkSwapchainKHR swapChains = { s_Data.Swapchain };
 		VkPresentInfoKHR presentInfo = {};
+		waits[0] = *Synchronization::GetSemaphore("RenderFinished");
+
 		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 		presentInfo.waitSemaphoreCount = 1;
-		presentInfo.pWaitSemaphores = &s_Synch[s_State.CurrentFrame].SemRenderFinished;
-		
-		VkSwapchainKHR swapChains = { s_Data.Swapchain };
+		presentInfo.pWaitSemaphores = waits;
 		presentInfo.swapchainCount = 1;
 		presentInfo.pSwapchains = &swapChains;
-		presentInfo.pImageIndices = &s_State.CurrentImage;
+		presentInfo.pImageIndices = &currImage;
 		presentInfo.pResults = nullptr;
 
-		res = vkQueuePresentKHR(*s_Data.PresentationQueue, &presentInfo);
+		VkResult res = vkQueuePresentKHR(*s_Data.PresentationQueue, &presentInfo);
 		if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR || s_State.FramebufferResized)
 		{
 			RecreateSwapchain();
 			s_State.FramebufferResized = false;
 			return;
 		}
-		s_State.CurrentFrame = (s_State.CurrentFrame + 1) % s_Config.MaxFramesInFlight;
+
+		State::SetCurrentFrameIndex((State::CurrentFramebufferIndex() + 1) % s_Config.MaxFramesInFlight);
+	}
+
+	void Renderer::DrawFrame()
+	{
+		RecordCommandBuffer(s_Data.CommandBuffers[State::CurrentFramebufferIndex()]);
 	}
 
 	void Renderer::Destroy()
@@ -593,13 +529,6 @@ namespace Low
 		vkDestroyRenderPass(VulkanCore::Device(), *s_Data.RenderPass, nullptr);
 
 		vkDestroyCommandPool(VulkanCore::Device(), s_Data.CommandPool, nullptr);
-
-		for (uint32_t i = 0; i < s_Synch.size(); i++)
-		{
-			vkDestroySemaphore(VulkanCore::Device(), s_Synch[i].SemImageAvailable, nullptr);
-			vkDestroySemaphore(VulkanCore::Device(), s_Synch[i].SemRenderFinished, nullptr);
-			vkDestroyFence(VulkanCore::Device(), s_Synch[i].FenInFlight, nullptr);
-		}
 
 		vkDestroyDescriptorPool(VulkanCore::Device(), s_Data.DescriptorPool, nullptr);
 		vkDestroyDescriptorSetLayout(VulkanCore::Device(), s_Data.DescriptorSetLayout, nullptr);

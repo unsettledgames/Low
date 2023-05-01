@@ -50,20 +50,20 @@ namespace Low
 		static inline Ref<Semaphore> GetSemaphore(const std::string& name) 
 		{ 
 			if (s_Semaphores.find(name) != s_Semaphores.end())
-				return WrapRef<Semaphore>(&s_Semaphores[name]);
+				return s_Semaphores[name];
 			return nullptr;
 		}
 
 		static inline Ref<Fence> GetFence(const std::string& name)
 		{
 			if (s_Fences.find(name) != s_Fences.end())
-				return WrapRef<Fence>(&s_Fences[name]);
+				return s_Fences[name];
 			return nullptr;
 		}
 	
 	private:
-		static std::unordered_map<std::string, Semaphore> s_Semaphores;
-		static std::unordered_map<std::string, Fence> s_Fences;
+		static std::unordered_map<std::string, Ref<Semaphore>> s_Semaphores;
+		static std::unordered_map<std::string, Ref<Fence>> s_Fences;
 		static uint32_t s_FramesInFlight;
 	};
 }

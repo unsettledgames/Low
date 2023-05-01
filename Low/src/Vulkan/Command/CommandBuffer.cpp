@@ -8,7 +8,6 @@ namespace Low
 	void CommandBuffer::Reset()
 	{
 		vkResetCommandBuffer(m_Handle, 0);
-		m_RenderPasses.clear();
 	}
 
 	void CommandBuffer::Begin()
@@ -23,11 +22,6 @@ namespace Low
 		if (vkBeginCommandBuffer(m_Handle, &beginInfo) != VK_SUCCESS) {
 			throw std::runtime_error("failed to begin recording command buffer!");
 		}
-	}
-
-	void CommandBuffer::PushRenderPass(Ref<RenderPass> renderPass)
-	{
-		m_RenderPasses.push_back(renderPass);
 	}
 
 	void CommandBuffer::End()

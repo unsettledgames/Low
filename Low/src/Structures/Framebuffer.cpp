@@ -1,5 +1,6 @@
 #include <Vulkan/VulkanCore.h>
 #include <Hardware/Memory.h>
+#include <Vulkan/Command/ImmediateCommands.h>
 #include <Structures/Framebuffer.h>
 
 namespace Low
@@ -36,6 +37,8 @@ namespace Low
 
 				if (vkCreateImage(VulkanCore::Device(), &texInfo, nullptr, &attachment.Image) != VK_SUCCESS)
 					throw std::runtime_error("Couldn't create texture image");
+
+				//ImmediateCommands::TransitionImageLayout(attachment.Image, texInfo.format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
 				VkMemoryRequirements memoryReqs;
 				vkGetImageMemoryRequirements(VulkanCore::Device(), attachment.Image, &memoryReqs);

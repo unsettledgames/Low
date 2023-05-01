@@ -160,7 +160,9 @@ namespace Lower
         while (!glfwWindowShouldClose(m_WindowHandle)) 
         {
             glfwPollEvents();
+            Low::Renderer::Begin();
             Low::Renderer::DrawFrame();
+            Low::Renderer::End();
         }
 
         Stop();
