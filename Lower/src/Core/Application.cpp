@@ -16,6 +16,8 @@
 
 #include <iostream>
 
+using namespace Low;
+
 namespace Lower
 {
     Application* Application::s_Application;
@@ -153,6 +155,9 @@ namespace Lower
 
         InitRenderer();
         InitImGui();
+
+        m_Meshes.push_back(CreateRef<Mesh>("../../Assets/Models/Sphere/sphere.obj"));
+        m_Materials.push_back(CreateRef<MaterialInstance>());
 	}
 
 	void Application::Run()
@@ -160,8 +165,9 @@ namespace Lower
         while (!glfwWindowShouldClose(m_WindowHandle)) 
         {
             glfwPollEvents();
+
             Low::Renderer::Begin();
-            Low::Renderer::DrawFrame();
+            Renderer::PushModel(m_Meshes[0], m_Materials[0], glm::mat4(1.0f));
             Low::Renderer::End();
         }
 

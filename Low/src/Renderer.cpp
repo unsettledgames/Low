@@ -36,6 +36,7 @@
 #include <Resources/Texture.h>
 #include <Resources/Shader.h>
 #include <Resources/Mesh.h>
+#include <Resources/MaterialInstance.h>
 
 #include <GLFW/glfw3.h>
 #include <stb_image.h>
@@ -43,6 +44,7 @@
 namespace Low
 {
 	std::vector<Ref<CommandBuffer>> Renderer::s_CommandBuffers;
+	std::unordered_map<UUID, std::vector<Renderable>> Renderer::s_Renderables;
 	static RendererConfig s_Config;
 
 	struct RendererResources
@@ -59,10 +61,7 @@ namespace Low
 
 	struct RendererData
 	{
-		// Device
-		VkSurfaceKHR WindowSurface = VK_NULL_HANDLE;
 		Ref<Swapchain> Swapchain = VK_NULL_HANDLE;
-
 		Ref<Queue> GraphicsQueue = VK_NULL_HANDLE;
 		Ref<Queue> PresentationQueue = VK_NULL_HANDLE;
 
@@ -70,9 +69,9 @@ namespace Low
 		RendererResources* Resources;
 
 		// Pipeline
-		VkPipelineLayout PipelineLayout;
 		Ref<RenderPass> RenderPass;
 		Ref<GraphicsPipeline> GraphicsPipeline;
+		std::vector<Ref<Framebuffer>> Framebuffers;
 
 		// Commands
 		Ref<CommandPool> CommandPool;
@@ -87,15 +86,8 @@ namespace Low
 		std::vector<void*> UniformBuffersMapped;
 
 		GLFWwindow* WindowHandle;
-		std::vector<const char*> RequiredExtesions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
-		std::vector<Ref<Framebuffer>> Framebuffers;
 
 	} s_Data;
-
-	struct RendererState
-	{
-		bool FramebufferResized = false;
-	} s_State;
 
 	struct UniformBufferObject
 	{
@@ -103,38 +95,6 @@ namespace Low
 		glm::mat4 View;
 		glm::mat4 Projection;
 	};
-
-	static void RecordCommandBuffer(Ref<CommandBuffer> commandBuffer)
-	{
-		State::BindCommandBuffer(commandBuffer);
-		commandBuffer->Begin();
-
-		s_Data.RenderPass->Begin(s_Data.GraphicsPipeline, s_Data.Swapchain->Extent());
-		{
-			VkBuffer buffers[] = { *s_Data.Resources->Mesh->VertexBuffer() };
-			VkDeviceSize offsets[] = { 0 };
-
-			// Draw model
-			{
-				vkCmdBindVertexBuffers(*commandBuffer, 0, 1, buffers, offsets);
-				vkCmdBindIndexBuffer(*commandBuffer, *s_Data.Resources->Mesh->IndexBuffer(), 0, VK_INDEX_TYPE_UINT32);
-				vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, s_Data.PipelineLayout, 0, 1,
-					&s_Data.DescriptorSets[State::CurrentFramebufferIndex()], 0, nullptr);
-
-				PushConsts consts;
-
-				consts.AO = 0.01f;
-				consts.Metallic = 0.5f;
-				consts.Roughness = 1.0f;
-				consts.CameraPos = glm::vec3(0.0f, 2, 2);
-
-				vkCmdPushConstants(*commandBuffer, s_Data.PipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConsts), &consts);
-				vkCmdDrawIndexed(*commandBuffer, s_Data.Resources->Mesh->IndexBuffer()->Size() / sizeof(uint32_t), 1, 0, 0, 0);
-			}
-		}
-		s_Data.RenderPass->End();
-		commandBuffer->End();
-	}
 
 	static void RecreateSwapchain()
 	{
@@ -169,7 +129,7 @@ namespace Low
 
 	static void OnFramebufferResize(GLFWwindow* window, int width, int height)
 	{
-		s_State.FramebufferResized = true;
+		RecreateSwapchain();
 	}
 
 	static void CreateUniformBuffers()
@@ -290,7 +250,6 @@ namespace Low
 
 		VulkanCore::Init(coreConfig);
 		
-		s_Data.WindowSurface = VulkanCore::Surface();
 		s_Data.GraphicsQueue = VulkanCore::GraphicsQueue();
 		s_Data.PresentationQueue = VulkanCore::PresentQueue();
 
@@ -306,8 +265,7 @@ namespace Low
 
 		CreateUniformBuffers();
 
-		s_Data.CommandPool = CreateRef<CommandPool>(Support::GetQueueFamilyIndices(VulkanCore::PhysicalDevice(), s_Data.WindowSurface));
-
+		s_Data.CommandPool = CreateRef<CommandPool>(Support::GetQueueFamilyIndices(VulkanCore::PhysicalDevice(), VulkanCore::Surface()));
 		ImmediateCommands::Init(*s_Data.CommandPool);
 
 		std::vector<Ref<CommandBuffer>> commandBuffers = s_Data.CommandPool->AllocateCommandBuffers(s_Config.MaxFramesInFlight);
@@ -339,7 +297,6 @@ namespace Low
 
 		Ref<GraphicsPipeline> graphicsPipeline = CreateRef<GraphicsPipeline>(shader, descriptorSetLayout, s_Data.RenderPass, s_Data.Swapchain->Extent());
 		s_Data.GraphicsPipeline = graphicsPipeline;
-		s_Data.PipelineLayout = graphicsPipeline->Layout();
 
 		/* TODO:
 		* - Expose uniform memory
@@ -380,8 +337,35 @@ namespace Low
 			State::SetFramebuffer(s_Data.Framebuffers[0]);
 		}
 	}
-	
+
 	void Renderer::Begin()
+	{
+
+	}
+
+	void Renderer::PushModel(Ref<Mesh> mesh, Ref<MaterialInstance> material, const glm::mat4& transform)
+	{
+		Renderable r = { mesh, material, transform };
+		UUID materialID = material->ID();
+
+		if (s_Renderables.find(materialID) == s_Renderables.end())
+			s_Renderables[materialID] = std::vector<Renderable>();
+		s_Renderables[materialID].push_back(r);
+	}
+	
+	void Renderer::End()
+	{
+		Optimize();
+		PrepareResources();
+		DrawFrame();
+	}
+
+	void Renderer::Optimize()
+	{
+
+	}
+
+	void Renderer::PrepareResources()
 	{
 		UpdateUniformBuffer(State::CurrentFramebufferIndex());
 
@@ -390,7 +374,7 @@ namespace Low
 
 		// Acquire next image
 		uint32_t imgIndex;
-		VkResult res = vkAcquireNextImageKHR(VulkanCore::Device(), *s_Data.Swapchain, UINT64_MAX, 
+		VkResult res = vkAcquireNextImageKHR(VulkanCore::Device(), *s_Data.Swapchain, UINT64_MAX,
 			*Synchronization::GetSemaphore("ImageAvailable"), VK_NULL_HANDLE, &imgIndex);
 		if (res != VK_SUCCESS)
 			throw std::runtime_error("Couldn't acquire image");
@@ -407,61 +391,93 @@ namespace Low
 		vkResetCommandBuffer(*s_Data.CommandBuffers[State::CurrentFramebufferIndex()], 0);
 	}
 
-	void Renderer::End()
+	void Renderer::DrawFrame()
 	{
-		// Get submitted command buffers
-		VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-		std::vector<VkCommandBuffer> cmdBuffers(s_CommandBuffers.size());
-		for (uint32_t i = 0; i < cmdBuffers.size(); i++)
-			cmdBuffers[i] = *s_CommandBuffers[i];
-
-		// Submit commands
-		VkSubmitInfo submitInfo = {};
-		VkSemaphore waits[] = { *Synchronization::GetSemaphore("ImageAvailable") };
-		VkSemaphore signals[] = { *Synchronization::GetSemaphore("RenderFinished") };
-		VkCommandBuffer buffers[] = { *s_Data.CommandBuffers[State::CurrentFramebufferIndex()] };
-
-		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		submitInfo.waitSemaphoreCount = 1;
-		submitInfo.pWaitSemaphores = waits;
-		submitInfo.pWaitDstStageMask = waitStages;
-		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = buffers;
-		submitInfo.signalSemaphoreCount = 1;
-		submitInfo.pSignalSemaphores = signals;
-
-		if (vkQueueSubmit(*s_Data.GraphicsQueue, 1, &submitInfo, *Synchronization::GetFence("FrameInFlight")) != VK_SUCCESS)
-			throw std::runtime_error("Couldn't submit queue for rendering");
-
-		// Present
-		uint32_t currImage = State::CurrentImageIndex();
-		VkSwapchainKHR swapChains = { *s_Data.Swapchain };
-		VkPresentInfoKHR presentInfo = {};
-		waits[0] = *Synchronization::GetSemaphore("RenderFinished");
-
-		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-		presentInfo.waitSemaphoreCount = 1;
-		presentInfo.pWaitSemaphores = waits;
-		presentInfo.swapchainCount = 1;
-		presentInfo.pSwapchains = &swapChains;
-		presentInfo.pImageIndices = &currImage;
-		presentInfo.pResults = nullptr;
-
-		VkResult res = vkQueuePresentKHR(*s_Data.PresentationQueue, &presentInfo);
-		if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR || s_State.FramebufferResized)
+		for (auto& batch : s_Renderables)
 		{
-			RecreateSwapchain();
-			s_State.FramebufferResized = false;
-			return;
+			Ref<CommandBuffer> commandBuffer = s_Data.CommandBuffers[State::CurrentFramebufferIndex()];
+
+			State::BindCommandBuffer(commandBuffer);
+			commandBuffer->Begin();
+
+			s_Data.RenderPass->Begin(s_Data.GraphicsPipeline, s_Data.Swapchain->Extent());
+			{
+				VkBuffer buffers[] = { *s_Data.Resources->Mesh->VertexBuffer() };
+				VkDeviceSize offsets[] = { 0 };
+
+				// Draw models
+				{
+					for (auto& model : batch.second)
+					{
+						vkCmdBindVertexBuffers(*commandBuffer, 0, 1, buffers, offsets);
+						vkCmdBindIndexBuffer(*commandBuffer, *s_Data.Resources->Mesh->IndexBuffer(), 0, VK_INDEX_TYPE_UINT32);
+						vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, s_Data.GraphicsPipeline->Layout(), 0, 1,
+							&s_Data.DescriptorSets[State::CurrentFramebufferIndex()], 0, nullptr);
+
+						PushConsts consts;
+
+						consts.AO = 0.01f;
+						consts.Metallic = 0.5f;
+						consts.Roughness = 1.0f;
+						consts.CameraPos = glm::vec3(0.0f, 2, 2);
+
+						vkCmdPushConstants(*commandBuffer, s_Data.GraphicsPipeline->Layout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConsts), &consts);
+						vkCmdDrawIndexed(*commandBuffer, s_Data.Resources->Mesh->IndexBuffer()->Size() / sizeof(uint32_t), 1, 0, 0, 0);
+					}
+				}
+			}
+			s_Data.RenderPass->End();
+			commandBuffer->End();
+
+			// Get submitted command buffers
+			VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+			std::vector<VkCommandBuffer> cmdBuffers(s_CommandBuffers.size());
+			for (uint32_t i = 0; i < cmdBuffers.size(); i++)
+				cmdBuffers[i] = *s_CommandBuffers[i];
+
+			// Submit commands
+			VkSubmitInfo submitInfo = {};
+			VkSemaphore waits[] = { *Synchronization::GetSemaphore("ImageAvailable") };
+			VkSemaphore signals[] = { *Synchronization::GetSemaphore("RenderFinished") };
+			VkCommandBuffer buffers[] = { *s_Data.CommandBuffers[State::CurrentFramebufferIndex()] };
+
+			submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+			submitInfo.waitSemaphoreCount = 1;
+			submitInfo.pWaitSemaphores = waits;
+			submitInfo.pWaitDstStageMask = waitStages;
+			submitInfo.commandBufferCount = 1;
+			submitInfo.pCommandBuffers = buffers;
+			submitInfo.signalSemaphoreCount = 1;
+			submitInfo.pSignalSemaphores = signals;
+
+			if (vkQueueSubmit(*s_Data.GraphicsQueue, 1, &submitInfo, *Synchronization::GetFence("FrameInFlight")) != VK_SUCCESS)
+				throw std::runtime_error("Couldn't submit queue for rendering");
+
+			// Present
+			uint32_t currImage = State::CurrentImageIndex();
+			VkSwapchainKHR swapChains = { *s_Data.Swapchain };
+			VkPresentInfoKHR presentInfo = {};
+			waits[0] = *Synchronization::GetSemaphore("RenderFinished");
+
+			presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+			presentInfo.waitSemaphoreCount = 1;
+			presentInfo.pWaitSemaphores = waits;
+			presentInfo.swapchainCount = 1;
+			presentInfo.pSwapchains = &swapChains;
+			presentInfo.pImageIndices = &currImage;
+			presentInfo.pResults = nullptr;
+
+			VkResult res = vkQueuePresentKHR(*s_Data.PresentationQueue, &presentInfo);
+			if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR)
+			{
+				RecreateSwapchain();
+				return;
+			}
 		}
 
 		State::SetCurrentFrameIndex((State::CurrentFramebufferIndex() + 1) % s_Config.MaxFramesInFlight);
 		State::SetFramebuffer(s_Data.Framebuffers[State::CurrentImageIndex()]);
-	}
-
-	void Renderer::DrawFrame()
-	{
-		RecordCommandBuffer(s_Data.CommandBuffers[State::CurrentFramebufferIndex()]);
+		
 	}
 
 	void Renderer::Destroy()

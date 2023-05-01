@@ -5,46 +5,22 @@
 * 
 *	USER API:
 *		- Begin: send global uniforms
-*		- PushModel: send a mesh, a material and its scene data
+*			- [VERTEX]		Camera view
+*			- [VERTEX]		Camera projection
+*			- [FRAGMENT]	Shadow maps
+*			- [FRAGMENT]	Lights
+* 
+*		- Since we're at it, I could just start a better material system.
+
+			- Frequently changing uniforms (push constants):
+				- Transform matrix
+			- Static-ish properties:
+				- Scalar material properties
+				- Textures
+* 
 *		- PushCommandBuffer: add a custom command buffer at the end
 *		- EmplaceCommandBuffer: add a custom command buffer at the beginning
-*		- End: draw everything
 * 
-*	RENDERER BEGIN:
-*		- PARAMETERS:
-*			- Global uniforms, they'll be the same for each freaking object
-*		- PARTS:
-*			- Update / upload uniforms: https://github.com/SaschaWillems/Vulkan/tree/master/examples/dynamicuniformbuffer
-*			- Get image to write on
-* 
-*	RENDERER MID:
-*		- Submit command buffers
-* 
-*	RENDERER END:
-*		- Submit queue
-*		- Present
-* 
-* 
-*	COMMAND BUFFER
-*		- Begin
-*		- Mid:
-*			- Submit render passes
-*		- End
-* 
-*	Render passes can be re-recorded every time or recorded once and then reused
-*   Each render pass renders using its own pipeline.
-* 
-*	RENDER PASS
-*		- Begin:
-*			- Bind pipeline
-*			- Set viewport / scissors
-*			
-*		- Mid:
-*			- Submit commands
-*			- For each model: 
-*				- Update its uniforms
-*				- Send models
-*		- End
 * 
 * MAIN ARCHITECTURE:
 *		- Build the right pipelines (before starting, maybe have the users provide the shaders that will be used)
@@ -66,6 +42,9 @@ namespace Low
 {
 	class CommandBuffer;
 
+	class MaterialInstance;
+	class Mesh;
+
 	struct RendererConfig
 	{
 		const char** Extensions;
@@ -74,22 +53,31 @@ namespace Low
 		uint32_t MaxFramesInFlight;
 	};
 
+	struct Renderable
+	{
+		Ref<Mesh> Mesh;
+		Ref<MaterialInstance> Material;
+		glm::mat4 Transform;
+	};
+
 	class Renderer
 	{
 	public:
 		static void Init(RendererConfig config, GLFWwindow* windowHandle);
 
 		static void Begin();
-		static inline void PushCommandBuffer(Ref<CommandBuffer> cmdBuffer) { s_CommandBuffers.push_back(cmdBuffer); }
+		static void PushModel(Ref<Mesh> mesh, Ref<MaterialInstance> material, const glm::mat4& transform);
 		static void End();
-
-		static void BeginRenderPass(VkCommandBuffer cmdBuffer);
-		static void EndRenderPass(VkCommandBuffer cmdBuffer);
 
 		static void DrawFrame();
 		static void Destroy();
 
 	private:
+		static void Optimize();
+		static void PrepareResources();
+
+	private:
 		static std::vector<Ref<CommandBuffer>> s_CommandBuffers;
+		static std::unordered_map<UUID, std::vector<Renderable>> s_Renderables;
 	};
 }

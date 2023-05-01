@@ -1,16 +1,19 @@
 #pragma once
 
 #include <Core/Core.h>
+#include <Resources/Mesh.h>
+#include <Resources/MaterialInstance.h>
+
 #include <string>
 #include <vector>
 
 
 struct GLFWwindow;
 
+using namespace Low;
+
 namespace Lower
 {
-	class Layer;
-	
 	class Application
 	{
 	public:
@@ -21,8 +24,6 @@ namespace Lower
 		void Init();
 		void Run();
 		void Stop();
-
-		inline void PushLayer(Low::Ref<Layer> layer) { m_Layers.push_back(layer); }
 
 		inline GLFWwindow* WindowHandle() { return m_WindowHandle; }
 
@@ -36,7 +37,9 @@ namespace Lower
 		uint32_t m_Height;
 
 		GLFWwindow* m_WindowHandle;
-		std::vector<Low::Ref<Layer>> m_Layers;
+
+		std::vector<Ref<Mesh>> m_Meshes;
+		std::vector<Ref<MaterialInstance>> m_Materials;
 
 		static Application* s_Application;
 	};

@@ -28,6 +28,7 @@
 
 // Low
 #include <Core/Core.h>
+#include <Core/UUID.h>
 #include <Core/Instrumentor.h>
 
 // Third party
