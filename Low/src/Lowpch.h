@@ -21,6 +21,7 @@
 #include <unordered_set>
 #include <set>
 
+#include <variant>
 #include <string>
 #include <sstream>
 #include <iostream>
@@ -33,4 +34,7 @@
 
 // Third party
 #include <glm/glm.hpp>
+#include <glm/gtx/matrix_operation.hpp>
+#include <glm/gtx/quaternion.hpp>
+#include <glm/gtx/euler_angles.hpp>
 #include <Vulkan/vulkan.h>

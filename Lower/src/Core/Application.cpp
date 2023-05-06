@@ -26,6 +26,9 @@ namespace Lower
         m_Name(appName), m_Width(windowWidth), m_Height(windowHeight) 
     {
         s_Application = this;
+
+        m_Camera = Camera(glm::lookAt(glm::vec3(0.0f, 0.0f, 4), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f)),
+            glm::perspective(glm::radians(45.0f), (float)windowWidth / windowHeight, 0.1f, 10.0f));
     }
 
     void Application::InitImGui()
@@ -166,7 +169,7 @@ namespace Lower
         {
             glfwPollEvents();
 
-            Low::Renderer::Begin();
+            Low::Renderer::Begin(m_Camera);
             Renderer::PushModel(m_Meshes[0], m_Materials[0], glm::mat4(1.0f));
             Low::Renderer::End();
         }

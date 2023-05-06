@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Core/Core.h>
+#include <Resources/Camera.h>
 #include <Resources/Mesh.h>
 #include <Resources/MaterialInstance.h>
 
@@ -38,6 +39,7 @@ namespace Lower
 
 		GLFWwindow* m_WindowHandle;
 
+		Camera m_Camera;
 		std::vector<Ref<Mesh>> m_Meshes;
 		std::vector<Ref<MaterialInstance>> m_Materials;
 

@@ -10,7 +10,7 @@
 
 namespace Low
 {
-	GraphicsPipeline::GraphicsPipeline(Ref<Shader> shader, Ref<DescriptorSetLayout> descLayout, Ref<RenderPass> renderPass, const glm::vec2& size)
+	GraphicsPipeline::GraphicsPipeline(Ref<Shader> shader, const DescriptorSetLayout& descLayout, Ref<RenderPass> renderPass, const glm::vec2& size)
 	{
 		VkPipelineShaderStageCreateInfo vertShaderStageInfo = {};
 		vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -121,7 +121,7 @@ namespace Low
 		colorBlending.blendConstants[3] = 0.0f;
 
 		VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
-		VkDescriptorSetLayout layout = *descLayout;
+		VkDescriptorSetLayout layout = descLayout;
 
 		// Push constants
 		VkPushConstantRange pushConsts;

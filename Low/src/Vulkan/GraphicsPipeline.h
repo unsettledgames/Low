@@ -17,7 +17,7 @@ namespace Low
 	class GraphicsPipeline
 	{
 	public:
-		GraphicsPipeline(Ref<Shader> shader, Ref<DescriptorSetLayout> descLayout, Ref<RenderPass> renderPass, const glm::vec2& size);
+		GraphicsPipeline(Ref<Shader> shader, const DescriptorSetLayout& descLayout, Ref<RenderPass> renderPass, const glm::vec2& size);
 		~GraphicsPipeline();
 
 		void Bind();

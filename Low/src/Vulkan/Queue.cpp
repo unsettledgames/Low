@@ -1,4 +1,5 @@
 #include <Vulkan/Queue.h>
+#include <Vulkan/Swapchain.h>
 #include <Vulkan/Command/CommandBuffer.h>
 #include <Synchronization/Synchronization.h>
 #include <Core/State.h>
@@ -32,23 +33,23 @@ namespace Low
 			throw std::runtime_error("Couldn't submit queue for rendering");
 	}
 
-	void Queue::Present(Ref<CommandBuffer> cmdBuffer)
+	VkResult Queue::Present(Ref<Swapchain> swapchain)
 	{
 		assert(m_Type == QueueType::Present);
-		/*
+		// Present
 		uint32_t currImage = State::CurrentImageIndex();
-		VkSwapchainKHR swapChains = { s_Data.Swapchain };
+		VkSwapchainKHR swapChains = { *swapchain };
 		VkPresentInfoKHR presentInfo = {};
+		VkSemaphore waits[] = { *Synchronization::GetSemaphore("RenderFinished") };
 
 		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 		presentInfo.waitSemaphoreCount = 1;
-		presentInfo.pWaitSemaphores = &s_Synch[State::CurrentFramebufferIndex()].SemRenderFinished;
+		presentInfo.pWaitSemaphores = waits;
 		presentInfo.swapchainCount = 1;
 		presentInfo.pSwapchains = &swapChains;
 		presentInfo.pImageIndices = &currImage;
 		presentInfo.pResults = nullptr;
 
-		res = vkQueuePresentKHR(*s_Data.PresentationQueue, &presentInfo);
-		*/
+		return vkQueuePresentKHR(m_Handle, &presentInfo);
 	}
 }

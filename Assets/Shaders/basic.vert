@@ -1,6 +1,6 @@
 #version 450
 
-layout(binding = 0) uniform UniformBufferObject 
+layout(binding = 0) uniform CameraData
 {
 	mat4 Model;
 	mat4 View;

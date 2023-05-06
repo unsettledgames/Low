@@ -3,8 +3,7 @@
 
 namespace Low
 {
-	DescriptorSetLayout::DescriptorSetLayout()
-	{
+	/*
 		VkDescriptorSetLayoutBinding uboBinding = {};
 		uboBinding.binding = 0;
 		uboBinding.descriptorCount = 1;
@@ -27,13 +26,24 @@ namespace Low
 		sampler2.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
 		std::array<VkDescriptorSetLayoutBinding, 3> bindings = { uboBinding, samplerBinding, sampler2};
+	*/
+
+	DescriptorSetLayout::DescriptorSetLayout(const std::initializer_list<DescriptorSetBinding>& bindings)
+	{
+		std::vector<VkDescriptorSetLayoutBinding> vkBindings(bindings.size());
+		uint32_t i = 0;
+		for (auto& b : bindings)
+		{
+			vkBindings[i] = b.Handle;
+			i++;
+		}
 
 		VkDescriptorSetLayoutCreateInfo layoutInfo = {};
 		VkPipelineLayout pipelineLayout = {};
 
 		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-		layoutInfo.bindingCount = bindings.size();
-		layoutInfo.pBindings = bindings.data();
+		layoutInfo.bindingCount = vkBindings.size();
+		layoutInfo.pBindings = vkBindings.data();
 
 		if (vkCreateDescriptorSetLayout(VulkanCore::Device(), &layoutInfo, nullptr, &m_Handle) != VK_SUCCESS)
 			throw std::runtime_error("Couldn't create descriptor set layout");

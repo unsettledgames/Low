@@ -44,6 +44,7 @@ namespace Low
 
 	class MaterialInstance;
 	class Mesh;
+	class Camera;
 
 	struct RendererConfig
 	{
@@ -65,7 +66,7 @@ namespace Low
 	public:
 		static void Init(RendererConfig config, GLFWwindow* windowHandle);
 
-		static void Begin();
+		static void Begin(const Camera& camera);
 		static void PushModel(Ref<Mesh> mesh, Ref<MaterialInstance> material, const glm::mat4& transform);
 		static void End();
 

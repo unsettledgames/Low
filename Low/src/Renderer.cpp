@@ -85,6 +85,8 @@ namespace Low
 		std::vector<VkDeviceMemory> UniformBuffersMemory;
 		std::vector<void*> UniformBuffersMapped;
 
+		std::unordered_map<std::string, void*> GlobalUniformsMapped;
+
 		GLFWwindow* WindowHandle;
 
 	} s_Data;
@@ -96,7 +98,7 @@ namespace Low
 		glm::mat4 Projection;
 	};
 
-	static void RecreateSwapchain()
+	static void ResizeScreen()
 	{
 		int width = 0, height = 0;
 		glfwGetFramebufferSize(s_Data.WindowHandle, &width, &height);
@@ -129,7 +131,7 @@ namespace Low
 
 	static void OnFramebufferResize(GLFWwindow* window, int width, int height)
 	{
-		RecreateSwapchain();
+		ResizeScreen();
 	}
 
 	static void CreateUniformBuffers()
@@ -257,8 +259,13 @@ namespace Low
 
 		glfwSetFramebufferSizeCallback(windowHandle, OnFramebufferResize);
 
-		Ref<DescriptorSetLayout> descriptorSetLayout = CreateRef<DescriptorSetLayout>();
-		s_Data.DescriptorSetLayout = *descriptorSetLayout;
+		// DescriptorSetType type, DescriptorStageFlags stage, uint32_t binding, uint32_t amount
+		DescriptorSetLayout descriptorSetLayout({
+			DescriptorSetBinding(DescriptorSetType::Buffer, (uint32_t)DescriptorStage::Vertex, 0, 1),
+			DescriptorSetBinding(DescriptorSetType::Sampler, (uint32_t)DescriptorStage::Fragment, 1, 1),
+			DescriptorSetBinding(DescriptorSetType::Sampler, (uint32_t)DescriptorStage::Fragment, 2, 1)
+		});
+		s_Data.DescriptorSetLayout = descriptorSetLayout;
 
 		Ref<DescriptorPool> descriptorPool = CreateRef<DescriptorPool>(s_Config.MaxFramesInFlight);
 		s_Data.DescriptorPool = *descriptorPool;
@@ -301,8 +308,6 @@ namespace Low
 		/* TODO:
 		* - Expose uniform memory
 		* - Remove as much stuff from s_Data (iteratively)
-		* 
-		* - Abstract DrawFrame
 		* - Implement basic API
 		* 
 		* - Start implementing deferred PBR rendering
@@ -338,7 +343,7 @@ namespace Low
 		}
 	}
 
-	void Renderer::Begin()
+	void Renderer::Begin(const Camera& camera)
 	{
 
 	}
@@ -383,7 +388,7 @@ namespace Low
 		// Reset everything
 		if (res == VK_ERROR_OUT_OF_DATE_KHR)
 		{
-			RecreateSwapchain();
+			ResizeScreen();
 			return;
 		}
 
@@ -435,42 +440,12 @@ namespace Low
 			for (uint32_t i = 0; i < cmdBuffers.size(); i++)
 				cmdBuffers[i] = *s_CommandBuffers[i];
 
-			// Submit commands
-			VkSubmitInfo submitInfo = {};
-			VkSemaphore waits[] = { *Synchronization::GetSemaphore("ImageAvailable") };
-			VkSemaphore signals[] = { *Synchronization::GetSemaphore("RenderFinished") };
-			VkCommandBuffer buffers[] = { *s_Data.CommandBuffers[State::CurrentFramebufferIndex()] };
-
-			submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-			submitInfo.waitSemaphoreCount = 1;
-			submitInfo.pWaitSemaphores = waits;
-			submitInfo.pWaitDstStageMask = waitStages;
-			submitInfo.commandBufferCount = 1;
-			submitInfo.pCommandBuffers = buffers;
-			submitInfo.signalSemaphoreCount = 1;
-			submitInfo.pSignalSemaphores = signals;
-
-			if (vkQueueSubmit(*s_Data.GraphicsQueue, 1, &submitInfo, *Synchronization::GetFence("FrameInFlight")) != VK_SUCCESS)
-				throw std::runtime_error("Couldn't submit queue for rendering");
-
-			// Present
-			uint32_t currImage = State::CurrentImageIndex();
-			VkSwapchainKHR swapChains = { *s_Data.Swapchain };
-			VkPresentInfoKHR presentInfo = {};
-			waits[0] = *Synchronization::GetSemaphore("RenderFinished");
-
-			presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-			presentInfo.waitSemaphoreCount = 1;
-			presentInfo.pWaitSemaphores = waits;
-			presentInfo.swapchainCount = 1;
-			presentInfo.pSwapchains = &swapChains;
-			presentInfo.pImageIndices = &currImage;
-			presentInfo.pResults = nullptr;
-
-			VkResult res = vkQueuePresentKHR(*s_Data.PresentationQueue, &presentInfo);
+			VulkanCore::GraphicsQueue()->Submit({ commandBuffer });
+			VkResult res = VulkanCore::PresentQueue()->Present(s_Data.Swapchain);
+			
 			if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR)
 			{
-				RecreateSwapchain();
+				ResizeScreen();
 				return;
 			}
 		}
