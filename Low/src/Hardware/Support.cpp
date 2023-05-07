@@ -90,4 +90,11 @@ namespace Low
 
 		return ret;
 	}
+
+	uint32_t Support::GetPushConstantBlockSize(VkPhysicalDevice device)
+	{
+		VkPhysicalDeviceProperties props;
+		vkGetPhysicalDeviceProperties(device, &props);
+		return props.limits.maxPushConstantsSize;
+	}
 }

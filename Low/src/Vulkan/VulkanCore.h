@@ -8,10 +8,13 @@ namespace Low
 	{
 		std::vector<const char*> UserExtensions;
 		std::vector<const char*> LowExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+
 		GLFWwindow* WindowHandle;
+		uint32_t MaxFramesInFlight;
 	};
 
 	class Queue;
+	class DescriptorPool;
 
 	class VulkanCore
 	{
@@ -23,6 +26,8 @@ namespace Low
 		
 		static inline Ref<Queue> GraphicsQueue() { return s_GraphicsQueue; }
 		static inline Ref<Queue> PresentQueue() { return s_PresentQueue; }
+
+		static inline Ref<Low::DescriptorPool> DescriptorPool() { return s_DescriptorPool; }
 
 		static void Init(const VulkanCoreConfig& config);
 
@@ -39,6 +44,7 @@ namespace Low
 
 		static Ref<Queue> s_GraphicsQueue;
 		static Ref<Queue> s_PresentQueue;
+		static Ref<Low::DescriptorPool> s_DescriptorPool;
 
 		static VulkanCoreConfig s_Config;
 	};

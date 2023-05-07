@@ -151,6 +151,7 @@ namespace Low
 
 	static void CreateDescriptorSets()
 	{
+		// Given the layout, allocate the descriptors (HERE YOU SPECIFY HOW MANY OF THEM YOU NEED)
 		std::vector<VkDescriptorSetLayout> layouts(s_Config.MaxFramesInFlight, s_Data.DescriptorSetLayout);
 		VkDescriptorSetAllocateInfo allocateInfo = {};
 		allocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -158,12 +159,15 @@ namespace Low
 		allocateInfo.descriptorSetCount = s_Config.MaxFramesInFlight;
 		allocateInfo.pSetLayouts = layouts.data();
 
+		// Create the sets
 		s_Data.DescriptorSets.resize(s_Config.MaxFramesInFlight);
 		if (vkAllocateDescriptorSets(VulkanCore::Device(), &allocateInfo, s_Data.DescriptorSets.data()) != VK_SUCCESS)
 			throw std::runtime_error("Couldn't allocate descriptor sets");
 
+		// Do all of this for each FIF
 		for (uint32_t i = 0; i < s_Config.MaxFramesInFlight; i++)
 		{
+			// Use descriptor writes to set the values (MaterialInstance)
 			VkDescriptorBufferInfo bufferInfo = {};
 			bufferInfo.buffer = *s_Data.Resources->UniformBuffers[i];
 			bufferInfo.offset = 0;
@@ -180,7 +184,6 @@ namespace Low
 			samplerInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
 			std::array<VkWriteDescriptorSet, 3> descriptorWrites({});
-
 			descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			descriptorWrites[0].dstSet = s_Data.DescriptorSets[i];
 			descriptorWrites[0].dstBinding = 0;
@@ -245,6 +248,7 @@ namespace Low
 		for (uint32_t i = 0; i < config.ExtensionCount; i++)
 			coreConfig.UserExtensions.push_back(config.Extensions[i]);
 		coreConfig.WindowHandle = windowHandle;
+		coreConfig.MaxFramesInFlight = config.MaxFramesInFlight;
 
 		s_Config = config;
 		s_Data.WindowHandle = windowHandle;
@@ -261,14 +265,12 @@ namespace Low
 
 		// DescriptorSetType type, DescriptorStageFlags stage, uint32_t binding, uint32_t amount
 		DescriptorSetLayout descriptorSetLayout({
-			DescriptorSetBinding(DescriptorSetType::Buffer, (uint32_t)DescriptorStage::Vertex, 0, 1),
-			DescriptorSetBinding(DescriptorSetType::Sampler, (uint32_t)DescriptorStage::Fragment, 1, 1),
-			DescriptorSetBinding(DescriptorSetType::Sampler, (uint32_t)DescriptorStage::Fragment, 2, 1)
+			DescriptorSetBinding(DescriptorSetType::Buffer, ShaderStage::Vertex, 0, 1),
+			DescriptorSetBinding(DescriptorSetType::Sampler, ShaderStage::Fragment, 1, 1),
+			DescriptorSetBinding(DescriptorSetType::Sampler, ShaderStage::Fragment, 2, 1)
 		});
 		s_Data.DescriptorSetLayout = descriptorSetLayout;
-
-		Ref<DescriptorPool> descriptorPool = CreateRef<DescriptorPool>(s_Config.MaxFramesInFlight);
-		s_Data.DescriptorPool = *descriptorPool;
+		s_Data.DescriptorPool = *VulkanCore::DescriptorPool();
 
 		CreateUniformBuffers();
 

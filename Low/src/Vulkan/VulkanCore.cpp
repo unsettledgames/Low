@@ -1,4 +1,5 @@
 #include <Vulkan/VulkanCore.h>
+#include <Vulkan/Descriptor/DescriptorPool.h>
 #include <Core/Debug.h>
 #include <Vulkan/Queue.h>
 #include <Hardware/Support.h>
@@ -12,8 +13,9 @@ namespace Low
 	VkPhysicalDevice	VulkanCore::s_PhysicalDevice = VK_NULL_HANDLE;
 	VkSurfaceKHR		VulkanCore::s_WindowSurface = VK_NULL_HANDLE;
 
-	Ref<Queue>			VulkanCore::s_GraphicsQueue = VK_NULL_HANDLE;
-	Ref<Queue>			VulkanCore::s_PresentQueue = VK_NULL_HANDLE;
+	Ref<Queue>			VulkanCore::s_GraphicsQueue = nullptr;
+	Ref<Queue>			VulkanCore::s_PresentQueue = nullptr;
+	Ref<DescriptorPool>	VulkanCore::s_DescriptorPool = nullptr;
 
 	VulkanCoreConfig	VulkanCore::s_Config = {};
 
@@ -31,6 +33,8 @@ namespace Low
 
 		PickPhysicalDevice();
 		CreateLogicalDevice();
+
+		s_DescriptorPool = CreateRef<Low::DescriptorPool>(s_Config.MaxFramesInFlight);
 	}
 
 	void VulkanCore::CreateInstance()

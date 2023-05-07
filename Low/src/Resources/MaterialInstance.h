@@ -1,11 +1,10 @@
 #pragma once
 
 #include <Resources/Material.h>
+#include <Utils/Rendering/UniformTypes.h>
 
 namespace Low
 {
-	typedef std::variant<bool, int, float, glm::vec2, glm::vec3, glm::vec4, glm::mat3, glm::mat4> UniformData;
-
 	class MaterialInstance
 	{
 	public:

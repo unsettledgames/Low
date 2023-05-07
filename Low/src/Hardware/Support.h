@@ -25,5 +25,7 @@ namespace Low
 		static QueueFamilyIndices GetQueueFamilyIndices(VkPhysicalDevice device, VkSurfaceKHR surface);
 
 		static SwapchainSupportDetails GetSwapchainSupportDetails(VkPhysicalDevice device, VkSurfaceKHR surface);
+
+		static uint32_t GetPushConstantBlockSize(VkPhysicalDevice device);
 	};
 }
